@@ -1,0 +1,23 @@
+{
+  "name": "copilot-cli",
+  "version": "0.32.0",
+  "description": "Standalone GitHub Copilot CLI",
+  "license": "SEE LICENSE IN ../LICENSE.txt",
+  "private": false,
+  "type": "commonjs",
+  "bin": {
+    "copilot-cli": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "cli": "node dist/cli/index.js"
+  },
+  "dependencies": {
+    "open": "^10.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.16.3",
+    "typescript": "^5.8.3"
+  }
+}
