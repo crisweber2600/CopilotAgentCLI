@@ -41,8 +41,8 @@
 
 ## Phase 3.1: Setup
 
-- [ ] T001 Create project skeleton per implementation plan: `src/`, `tests/`, `.github/workflows/`, `artifacts/` (+ subfolders), add `.gitkeep` placeholders where needed.
-- [ ] T002 Initialize Node+TypeScript project: `package.json`, `tsconfig.json`, `vitest.config.ts`; add scripts (`build`, `test`, `lint`, `format`); add devDeps: `typescript`, `vitest`, `@types/node`, `ts-node`, `eslint`, `prettier`, `ajv`.
+- [x] T001 Create project skeleton per implementation plan: `src/`, `tests/`, `.github/workflows/`, `artifacts/` (+ subfolders), add `.gitkeep` placeholders where needed.
+- [x] T002 Initialize Node+TypeScript project: `package.json`, `tsconfig.json`, `vitest.config.ts`; add scripts (`build`, `test`, `lint`, `format`); add devDeps: `typescript`, `vitest`, `@types/node`, `ts-node`, `eslint`, `prettier`, `ajv`.
 - [ ] T003 [P] Configure lint/format: `.eslintrc.cjs`, `.prettierrc`, `lint-staged` (pre-commit optional), enforce strict TS in `tsconfig.json`.
 - [ ] T004 [P] Seed `artifacts/` structure: `workflows/`, `work-items/`, `claims/`, `schedule/`, `handoff/`, `gates/`, `exports/` with example stub files for tests.
 
