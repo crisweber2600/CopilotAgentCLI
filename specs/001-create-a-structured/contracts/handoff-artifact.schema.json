@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/schemas/handoff-artifact.schema.json",
+  "title": "Handoff Artifact",
+  "type": "object",
+  "required": [
+    "workItemId", "workflow", "step", "eventType", "attemptId", "timestamp",
+    "actor", "outcome", "nextAction", "baselineIntegration", "links", "schemaVersion"
+  ],
+  "properties": {
+    "workItemId": { "type": "string" },
+    "workflow": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "step": {
+      "type": "object",
+      "required": ["key", "order"],
+      "properties": {
+        "key": { "type": "string" },
+        "order": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "eventType": { "type": "string", "enum": ["attempt-started", "attempt-completed", "attempt-failed", "attempt-rejected", "gate-approved", "gate-rejected", "baseline-integration"] },
+    "attemptId": { "type": "string" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "actor": { "type": "string" },
+    "outcome": { "type": "string" },
+    "nextAction": { "type": "string" },
+    "baselineIntegration": { "type": "string", "enum": ["pre", "post"] },
+    "links": { "type": "array", "items": { "type": "string" } },
+    "schemaVersion": { "type": "string", "const": "1.0" }
+  }
+}
