@@ -5,7 +5,7 @@ import type { CliContext } from '../types';
 import { getStringFlag, parseArgs, resolveOutputFormat, writeJson, writeLine } from '../utils';
 import { handleDeviceCodePrompt } from '../auth/prompts';
 
-const SUPPORTED_METHODS: AuthMethod[] = ['device-code', 'env-token', 'github-pat'];
+const SUPPORTED_METHODS: AuthMethod[] = ['device-code', 'env-token', 'github-pat', 'github-session'];
 
 export async function loginCommand(args: string[], context: CliContext): Promise<number> {
   const parsed = parseArgs(args);

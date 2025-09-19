@@ -1,3 +1,4 @@
+import { randomBytes, createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -16,10 +17,12 @@ export interface AuthServiceOptions {
 const AUTH_FILE = 'auth.json';
 const DEVICE_CODE_URL = 'https://github.com/login/device/code';
 const ACCESS_TOKEN_URL = 'https://github.com/login/oauth/access_token';
+const AUTHORIZE_URL = 'https://github.com/login/oauth/authorize';
 const DEVICE_CODE_CLIENT_ID = '01ab8ac9400c4e429b23';
-const DEVICE_CODE_SCOPES = ['read:user', 'user:email', 'repo', 'workflow'];
+const SESSION_REDIRECT_URI = 'https://vscode.dev/redirect';
+const SESSION_SCOPES = ['read:user', 'user:email', 'repo', 'workflow'];
+const DEVICE_CODE_SCOPES = SESSION_SCOPES;
 const PAT_V3_URL = 'https://api.github.com';
-const SESSION_TOKEN_URL = 'https://github.com/github-copilot/chat/token';
 const DEFAULT_POLL_INTERVAL = 5;
 
 interface DeviceCodeResponse {
@@ -173,7 +176,18 @@ export class AuthService {
   }
 
   private async loginWithGitHubSession(): Promise<AuthSession> {
-    const { token, expiresAt } = await this.fetchSessionToken();
+    if (this.options.env.COPILOT_CLI_TEST_MODE) {
+      const session: AuthSession = {
+        method: 'github-session',
+        status: 'authenticated',
+        token: 'github-session-test-token',
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      };
+      await this.persist(session);
+      return this.withoutSecret(session);
+    }
+
+    const { token, expiresAt } = await this.exchangeGitHubSessionForOAuthToken();
     const session: AuthSession = {
       method: 'github-session',
       status: 'authenticated',
@@ -374,7 +388,17 @@ export class AuthService {
   }
 
   private async refreshGitHubSession(session: AuthSession): Promise<AuthSession> {
-    const { token, expiresAt } = await this.fetchSessionToken();
+    if (this.options.env.COPILOT_CLI_TEST_MODE) {
+      const refreshed: AuthSession = {
+        ...session,
+        status: 'authenticated',
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      };
+      await this.persist(refreshed);
+      return refreshed;
+    }
+
+    const { token, expiresAt } = await this.exchangeGitHubSessionForOAuthToken();
     const refreshed: AuthSession = {
       ...session,
       token,
@@ -419,33 +443,111 @@ export class AuthService {
     return raw.includes('user_session=') ? raw : `user_session=${raw}`;
   }
 
-  private async fetchSessionToken(): Promise<{ token: string; expiresAt?: string }> {
+  private async exchangeGitHubSessionForOAuthToken(): Promise<{ token: string; expiresAt?: string }> {
+    const clientSecret = this.options.env.COPILOT_CLI_GITHUB_CLIENT_SECRET?.trim();
+    if (!clientSecret) {
+      throw new AuthError('GitHub client secret not provided. Set COPILOT_CLI_GITHUB_CLIENT_SECRET to enable github-session authentication.');
+    }
+
     const cookie = this.sessionCookie();
+    const verifier = this.generateCodeVerifier();
+    const challenge = this.generateCodeChallenge(verifier);
+    const code = await this.requestOAuthCode(cookie, challenge);
+    const data = await this.exchangeCodeForToken(code, verifier, clientSecret);
+    const expiresAt = typeof data.expires_in === 'number'
+      ? new Date(Date.now() + Math.max(data.expires_in - 60, 300) * 1000).toISOString()
+      : undefined;
+    return { token: data.access_token, expiresAt };
+  }
+
+  private generateCodeVerifier(): string {
+    return this.toBase64Url(randomBytes(32));
+  }
+
+  private generateCodeChallenge(verifier: string): string {
+    const digest = createHash('sha256').update(verifier).digest();
+    return this.toBase64Url(digest);
+  }
+
+  private toBase64Url(buffer: Uint8Array | Buffer): string {
+    return Buffer.from(buffer)
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+  }
+
+  private async requestOAuthCode(cookie: string, codeChallenge: string): Promise<string> {
+    const params = new URLSearchParams({
+      client_id: DEVICE_CODE_CLIENT_ID,
+      scope: SESSION_SCOPES.join(' '),
+      redirect_uri: SESSION_REDIRECT_URI,
+      response_type: 'code',
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+    });
+
     let response: Response;
     try {
-      response = await fetch(SESSION_TOKEN_URL, {
-        method: 'POST',
+      response = await fetch(`${AUTHORIZE_URL}?${params.toString()}`, {
+        method: 'GET',
         headers: {
           Cookie: cookie,
-          'X-Requested-With': 'XMLHttpRequest',
-          'GitHub-Verified-Fetch': 'true',
-          Origin: 'https://github.com',
-          Accept: 'application/json',
+          'User-Agent': 'copilot-cli',
         },
+        redirect: 'manual',
       });
     } catch (error) {
-      throw new AuthError(`Failed to contact GitHub for Copilot token: ${(error as Error).message}`);
+      throw new AuthError(`Failed to contact GitHub for authorization code: ${(error as Error).message}`);
+    }
+
+    if (response.status !== 302) {
+      throw new AuthError(`GitHub authorization request failed with HTTP ${response.status}.`);
+    }
+    const location = response.headers.get('location');
+    if (!location) {
+      throw new AuthError('GitHub authorization response missing redirect location.');
+    }
+    const code = new URL(location).searchParams.get('code');
+    if (!code) {
+      throw new AuthError('GitHub authorization response missing code parameter.');
+    }
+    return code;
+  }
+
+  private async exchangeCodeForToken(code: string, verifier: string, clientSecret: string): Promise<{ access_token: string; expires_in?: number }> {
+    const body = new URLSearchParams({
+      client_id: DEVICE_CODE_CLIENT_ID,
+      client_secret: clientSecret,
+      code,
+      redirect_uri: SESSION_REDIRECT_URI,
+      code_verifier: verifier,
+    });
+
+    let response: Response;
+    try {
+      response = await fetch(ACCESS_TOKEN_URL, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'copilot-cli',
+        },
+        body: body.toString(),
+      });
+    } catch (error) {
+      throw new AuthError(`Failed to exchange GitHub authorization code: ${(error as Error).message}`);
     }
 
     if (!response.ok) {
-      throw new AuthError(`GitHub session token request failed with HTTP ${response.status}.`);
+      const message = await response.text();
+      throw new AuthError(`GitHub OAuth token request failed with HTTP ${response.status}: ${message}`);
     }
 
-    const data = (await response.json()) as { token?: string; expiration?: string };
-    if (!data.token) {
-      throw new AuthError('GitHub session token response did not include a token.');
+    const data = (await response.json()) as { access_token?: string; expires_in?: number };
+    if (!data.access_token) {
+      throw new AuthError('GitHub OAuth token response did not include an access token.');
     }
-
-    return { token: data.token, expiresAt: data.expiration };
+    return data as { access_token: string; expires_in?: number };
   }
 }
