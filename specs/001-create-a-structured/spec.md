@@ -114,10 +114,10 @@ As a **stakeholder** (initiator, contributor, reviewer, approver, observer), I w
 
 ---
 
-* **FR‑028**: Assume executor isolation (executors do not share runtime state). Coordination and handoffs MUST occur only via the durable shared workspace and recorded artifacts/decisions; orchestration for a given work item MUST run one at a time.
-* **FR‑029**: Support two persistence patterns for recording results while preserving auditability and exclusive assignment:
-  1) Producers commit handoff artifacts directly upon completion.
-  2) A downstream collector commits a batch of handoff artifacts after execution completes. Both patterns MUST yield equivalent history and not violate deterministic sequencing.
+- **FR‑028**: Assume executor isolation (executors do not share runtime state). Coordination and handoffs MUST occur only via the durable shared workspace and recorded artifacts/decisions; orchestration for a given work item MUST run one at a time.
+- **FR‑029**: Support two persistence patterns for recording results while preserving auditability and exclusive assignment:
+  1. Producers commit handoff artifacts directly upon completion.
+  2. A downstream collector commits a batch of handoff artifacts after execution completes. Both patterns MUST yield equivalent history and not violate deterministic sequencing.
 
 ### Key Entities _(include if feature involves data)_
 

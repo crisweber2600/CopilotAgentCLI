@@ -115,15 +115,18 @@ This phase produces the concrete design:
 4. Update Copilot agent context: `.specify/scripts/bash/update-agent-context.sh copilot` after plan.md is committed.
 
 ### CI Orchestration Pattern (Isolation‑Aware)
+
 - Orchestrator job (single): reads `artifacts/schedule/{workItem}.json`, applies deterministic rules (FR‑005), and emits a matrix of ready attempts in stable launch order. Optionally pre‑writes claim files to ensure exclusive assignment before fan‑out.
 - Execute jobs (matrix): each entry processes one attempt; on completion, produce handoff artifacts (FR‑014).
 - Collector job (single): downloads produced artifacts (or reads direct commits) and commits a batch to the durable workspace to minimize push contention; the commit can trigger the next orchestration cycle.
 
 Persistence strategies given isolated runners:
-1) Direct producer commit with rebase+retry (unique file paths avoid collisions). 
-2) Upload as workflow artifacts, then a single Collector commits once. Both preserve tamper‑evident history and exclusive assignment semantics.
+
+1. Direct producer commit with rebase+retry (unique file paths avoid collisions).
+2. Upload as workflow artifacts, then a single Collector commits once. Both preserve tamper‑evident history and exclusive assignment semantics.
 
 Concurrency controls:
+
 - Ensure only one orchestration instance per work item at a time (e.g., concurrency key per work item) to preserve determinism and audit trail.
 
 ## Phase 2: Task Planning Approach
