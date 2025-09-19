@@ -76,7 +76,7 @@ By default the CLI stores session data in `~/.copilot-agent/sessions.json`. Over
 | ------ | ------------- | ------------ |
 | Device Code | `login --method device-code` | Interactive login using `https://github.com/login/device/code` (default).
 | Environment Token | `login --method env-token` | Provide `COPILOT_AGENT_TOKEN` in the environment (non-expiring token).
-| GitHub PAT | `login --method github-pat` | Provide `GITHUB_TOKEN` or `GITHUB_PAT`. Token is validated against the GitHub API.
+| GitHub PAT | `login --method github-pat` | Provide `GITHUB_PAT` (classic token with at least `repo`, `workflow`, and `read:user` scopes). GitHub’s default Actions token doesn’t carry Copilot scopes, so use a dedicated secret.
 | Copilot Session | `login --method github-session` | Requires `COPILOT_CLI_SESSION_COOKIE=user_session=...` and `COPILOT_CLI_GITHUB_CLIENT_SECRET=...` to perform the OAuth exchange without a browser.
 
 The CLI caches credentials at `${COPILOT_AGENT_HOME}/auth.json`. Run `copilot-cli logout` to clear stored credentials.
