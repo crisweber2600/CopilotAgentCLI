@@ -1,0 +1,184 @@
+# Task Graph Definition
+# This YAML file defines the DAG structure for agent-swarmable tasks
+
+feature_name: "agent-swarmable"
+base_branch: "feat/agent-swarmable"
+created_at: "2025-09-19T00:00:00Z"
+updated_at: "2025-09-19T00:00:00Z"
+
+# Task execution phases (must be completed in order)
+phases:
+  - spec      # Schema definition and planning
+  - impl      # Implementation of core components
+  - test      # Testing and validation
+  - verify    # CI/CD and quality gates
+  - polish    # Documentation and examples
+
+# Parallel execution groups (tasks within a group can run concurrently)
+parallel_groups:
+  bootstrap:
+    description: "Initial setup and schema definition"
+    phase: "spec"
+  interfaces:
+    description: "TypeScript interfaces and type definitions"
+    phase: "impl"
+  infra:
+    description: "Core infrastructure scripts and utilities"
+    phase: "impl"
+  services:
+    description: "Service implementations and orchestration"
+    phase: "impl"
+  cli:
+    description: "CLI command implementations"
+    phase: "impl"
+  testing:
+    description: "Unit and integration testing"
+    phase: "test"
+  ci_cd:
+    description: "CI/CD workflows and automation"
+    phase: "verify"
+  documentation:
+    description: "Documentation and examples"
+    phase: "polish"
+
+# Task definitions
+tasks:
+  - id: T001
+    name: "Define machine schema + wiring"
+    phase: "spec"
+    parallel_group: "bootstrap"
+    estimated_minutes: 30
+    outputs:
+      - ".specify/schema/task.ndjson.schema.json"
+      - ".specify/graph/task_graph.yaml"
+    merge_base: "feat/agent-swarmable"
+
+  - id: T002
+    name: "Create TypeScript task interfaces"
+    phase: "impl"
+    parallel_group: "interfaces"
+    estimated_minutes: 25
+    requires: ["T001"]
+    outputs:
+      - "src/models/taskSpec.ts"
+      - "src/types/agentContract.ts"
+    merge_base: "feat/agent-swarmable"
+
+  - id: T003
+    name: "Setup .specify directory structure"
+    phase: "spec"
+    parallel_group: "bootstrap"
+    estimated_minutes: 20
+    requires: ["T001"]
+    outputs:
+      - ".specify/config/agent_config.yaml"
+      - ".specify/templates/task_template.ndjson"
+    merge_base: "feat/agent-swarmable"
+
+  - id: T004
+    name: "Implement lock/lease metadata I/O"
+    phase: "impl"
+    parallel_group: "infra"
+    estimated_minutes: 40
+    requires: ["T002"]
+    outputs:
+      - "scripts/task_claim.py"
+      - "docs/claiming.md"
+    merge_base: "feat/agent-swarmable"
+
+  - id: T005
+    name: "DAG validator + topo sort"
+    phase: "impl"
+    parallel_group: "infra"
+    estimated_minutes: 35
+    requires: ["T002"]
+    outputs:
+      - "scripts/dag_validate.py"
+      - "src/utils/graphValidator.ts"
+    merge_base: "feat/agent-swarmable"
+
+  - id: T006
+    name: "Task specification parser"
+    phase: "impl"
+    parallel_group: "services"
+    estimated_minutes: 30
+    requires: ["T002", "T003"]
+    outputs:
+      - "src/services/taskParser.ts"
+      - "src/utils/ndjsonReader.ts"
+    merge_base: "feat/agent-swarmable"
+
+  - id: T007
+    name: "Agent contract implementation"
+    phase: "impl"
+    parallel_group: "services"
+    estimated_minutes: 35
+    requires: ["T004", "T005", "T006"]
+    outputs:
+      - "src/services/agentContract.ts"
+      - "docs/agent_contract.md"
+    merge_base: "feat/agent-swarmable"
+
+  - id: T008
+    name: "CLI integration commands"
+    phase: "impl"
+    parallel_group: "cli"
+    estimated_minutes: 40
+    requires: ["T007"]
+    outputs:
+      - "src/cli/commands/claim.ts"
+      - "src/cli/commands/release.ts"
+      - "src/cli/commands/task-status.ts"
+    merge_base: "feat/agent-swarmable"
+
+  - id: T009
+    name: "Unit tests for core components"
+    phase: "test"
+    parallel_group: "testing"
+    estimated_minutes: 55
+    requires: ["T008"]
+    outputs:
+      - "tests/unit/taskSpec.spec.ts"
+      - "tests/unit/agentContract.spec.ts"
+    merge_base: "feat/agent-swarmable"
+
+  - id: T010
+    name: "Integration tests for workflows"
+    phase: "test"
+    parallel_group: "testing"
+    estimated_minutes: 65
+    requires: ["T008"]
+    outputs:
+      - "tests/integration/taskWorkflow.spec.ts"
+      - "tests/integration/claiming.spec.ts"
+    merge_base: "feat/agent-swarmable"
+
+  - id: T011
+    name: "CI wiring & checks"
+    phase: "verify"
+    parallel_group: "ci_cd"
+    estimated_minutes: 30
+    requires: ["T009", "T010"]
+    outputs:
+      - ".github/workflows/tasks-ci.yml"
+    merge_base: "feat/agent-swarmable"
+
+  - id: T012
+    name: "Documentation and examples"
+    phase: "polish"
+    parallel_group: "documentation"
+    estimated_minutes: 40
+    requires: ["T011"]
+    outputs:
+      - "docs/swarm_framework.md"
+      - "examples/sample_tasks.ndjson"
+    merge_base: "feat/agent-swarmable"
+
+# Validation rules
+validation:
+  - rule: "All task IDs must be unique and follow T### pattern"
+  - rule: "All dependencies must reference existing task IDs"
+  - rule: "No circular dependencies allowed"
+  - rule: "Tasks within parallel groups must not depend on each other"
+  - rule: "All branch names must follow feat/<feature-name>__T### pattern"
+  - rule: "All merge_base values must be the same feature branch"

@@ -1,0 +1,106 @@
+# Agent Configuration for Swarmable Framework
+# This file configures agent behavior and integration settings
+
+# Agent behavior settings
+agent:
+  # Default lease duration in minutes for task claiming
+  default_lease_minutes: 90
+  
+  # Default heartbeat interval in minutes
+  default_heartbeat_minutes: 10
+  
+  # Maximum number of tasks an agent can claim simultaneously
+  max_concurrent_tasks: 3
+  
+  # Default retry policy for failed tasks
+  default_retry_policy:
+    max_retries: 2
+    backoff: "exponential"
+    base_seconds: 20
+
+# Task management settings
+tasks:
+  # Directory containing NDJSON task specifications
+  specs_directory: ".specify/tasks"
+  
+  # File containing task graph definition
+  graph_file: ".specify/graph/task_graph.yaml"
+  
+  # JSON schema for validating task specifications
+  schema_file: ".specify/schema/task.ndjson.schema.json"
+  
+  # Directory for claim metadata files
+  claims_directory: ".specify/claims"
+
+# Git integration settings
+git:
+  # Base branch pattern for features
+  feature_branch_pattern: "feat/{feature-slug}"
+  
+  # Task branch pattern
+  task_branch_pattern: "feat/{feature-slug}__T{task-id}"
+  
+  # Commit message template for task work
+  commit_message_template: "[{task-id}] {commit-message}"
+  
+  # Auto-push completed task branches
+  auto_push: true
+  
+  # Create pull requests automatically
+  auto_create_pr: true
+
+# Pull request settings
+pull_requests:
+  # Default labels for task PRs
+  default_labels:
+    - "auto:swarm"
+    - "task"
+  
+  # PR title template
+  title_template: "[{task-id}] {task-name}"
+  
+  # Create PRs as draft by default
+  default_draft: false
+  
+  # Auto-assign reviewers
+  auto_assign_reviewers: []
+
+# Validation settings
+validation:
+  # Validate task dependencies before claiming
+  check_dependencies: true
+  
+  # Validate output files exist before marking done
+  check_outputs: true
+  
+  # Validate completion criteria
+  check_done_criteria: true
+
+# Logging and monitoring
+monitoring:
+  # Log level (debug, info, warn, error)
+  log_level: "info"
+  
+  # Log file location
+  log_file: ".specify/logs/agent.log"
+  
+  # Enable metrics collection
+  enable_metrics: false
+
+# Integration with external systems
+integrations:
+  # GitHub integration settings
+  github:
+    # Use GitHub CLI for operations
+    use_gh_cli: true
+    
+    # Default remote name
+    default_remote: "origin"
+  
+  # Spec-kit compatibility
+  spec_kit:
+    # Enable spec-kit format compatibility
+    enabled: true
+    
+    # Directory for spec-kit compatible files
+    output_directory: ".specify/spec-kit"
