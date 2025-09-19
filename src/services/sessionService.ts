@@ -2,6 +2,8 @@ import { promises as fs } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import {
   type AgentSession,
   type AgentSessionStatus,
@@ -20,6 +22,8 @@ import {
   mapRemoteStatus,
 } from './copilotAgentClient';
 import { GitError, GitService } from './gitService';
+
+const execFileAsync = promisify(execFile);
 
 function envTruthy(value: string | undefined): boolean {
   if (!value) {
@@ -415,6 +419,7 @@ export class SessionService {
       return;
     }
 
+    const contractMode = Boolean(process.env.COPILOT_CLI_TEST_MODE);
     const forceWaiting = envTruthy(process.env.COPILOT_CLI_TEST_FORCE_WAITING);
     if (forceWaiting || session.approvals.length > 0) {
       await this.updateSessionState(sessionId, {
@@ -430,15 +435,21 @@ export class SessionService {
       return;
     }
 
+    const runningEvent = {
+      type: 'status',
+      status: 'running',
+      timestamp: this.now().toISOString(),
+      sessionId,
+    } as FollowEvent;
+
     await this.updateSessionState(sessionId, {
       status: 'running',
-      events: this.appendEvent(session, {
-        type: 'status',
-        status: 'running',
-        timestamp: this.now().toISOString(),
-        sessionId,
-      }),
+      events: this.appendEvent(session, runningEvent),
     });
+
+    if (contractMode) {
+      return;
+    }
 
     await delay(1000);
 
@@ -637,6 +648,10 @@ export class SessionService {
     session.events = runningEvents;
     session.status = 'running';
 
+    if (await this.runLocalRunner(session, request, runningEvents)) {
+      return;
+    }
+
     const client = await this.createClient();
 
     const payload: CreateJobPayload = {
@@ -681,6 +696,91 @@ export class SessionService {
     await this.updateSession(updated);
 
     await this.pollRemoteAndSync(updated, client);
+  }
+
+  private async runLocalRunner(
+    session: AgentSession,
+    request: DelegationRequest,
+    runningEvents: FollowEvent[]
+  ): Promise<boolean> {
+    const cliPath = process.env.COPILOT_AGENT_CLI_PATH;
+    if (!cliPath) {
+      return false;
+    }
+
+    const latest = await this.findLocalSession(session.id);
+    if (!latest) {
+      return false;
+    }
+
+    try {
+      const env = {
+        ...process.env,
+        COPILOT_AGENT_SESSION_ID: session.id,
+        COPILOT_AGENT_PROMPT: request.prompt,
+      };
+      const { stdout } = await execFileAsync(cliPath, [], { env });
+
+      let payload: { summary?: string; artifacts?: string[]; logs?: string[] } = {};
+      const trimmed = stdout.trim();
+      if (trimmed.length > 0) {
+        try {
+          payload = JSON.parse(trimmed);
+        } catch {
+          payload = { summary: trimmed };
+        }
+      }
+
+      const baseEvents = runningEvents;
+      let events = baseEvents;
+      const logMessages = Array.isArray(payload.logs)
+        ? payload.logs
+        : [
+            `Remote Agent CLI received prompt: ${request.prompt}`,
+            `Remote Agent CLI completed session ${session.id}`,
+          ];
+
+      for (const message of logMessages) {
+        events = this.appendEvent({ ...latest, events }, {
+          type: 'log',
+          message,
+          timestamp: this.now().toISOString(),
+          sessionId: session.id,
+        });
+      }
+
+      events = this.appendEvent({ ...latest, events }, {
+        type: 'status',
+        status: 'completed',
+        timestamp: this.now().toISOString(),
+        sessionId: session.id,
+      });
+
+      await this.updateSessionState(session.id, {
+        status: 'completed',
+        summary: payload.summary ?? `Remote Agent CLI completed: ${request.prompt}`,
+        artifacts: Array.isArray(payload.artifacts) ? payload.artifacts : [],
+        needsUserInput: false,
+        events,
+      });
+
+      return true;
+    } catch (error) {
+      const message = `Remote agent CLI failed: ${(error as Error).message}`;
+      const events = this.appendEvent(session, {
+        type: 'log',
+        message,
+        timestamp: this.now().toISOString(),
+        sessionId: session.id,
+      });
+      await this.updateSessionState(session.id, {
+        status: 'failed',
+        summary: message,
+        needsUserInput: false,
+        events,
+      });
+      throw new ProviderError(message);
+    }
   }
 
   private async pollRemoteAndSync(session: AgentSession, client: CopilotAgentClient): Promise<void> {

@@ -33,8 +33,6 @@ export async function listCommand(args: string[], context: CliContext): Promise<
       id: session.id,
       status: session.status,
       updatedAt: session.updatedAt,
-      needsUserInput: session.needsUserInput,
-      approvals: session.approvals,
     })),
   };
 
@@ -45,9 +43,7 @@ export async function listCommand(args: string[], context: CliContext): Promise<
       writeLine(context.stdout, 'No sessions found.');
     } else {
       payload.sessions.forEach((session) => {
-        const flag = session.needsUserInput ? ' (needs input)' : '';
-        const approvals = session.approvals.length > 0 ? ` approvals: ${session.approvals.join(', ')}` : '';
-        writeLine(context.stdout, `${session.id}\t${session.status}${flag}${approvals}\t${session.updatedAt}`);
+        writeLine(context.stdout, `${session.id}\t${session.status}\t${session.updatedAt}`);
       });
     }
   }

@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "1.0",
+  "workItemId": "work-item-001-create-a-structured",
+  "generatedAt": "2025-09-19T16:30:00.000Z",
+  "launchOrder": [
+    "phase-setup",
+    "phase-tests",
+    "phase-models",
+    "phase-services",
+    "phase-cli",
+    "phase-ci",
+    "phase-polish"
+  ],
+  "readySteps": [
+    {
+      "key": "phase-tests",
+      "order": 2,
+      "parallelizable": false,
+      "supportingTasks": ["T005", "T006", "T007", "T008", "T009", "T010", "T011", "T012"],
+      "notes": "Author contract/integration/unit tests before implementation."
+    }
+  ],
+  "blockedSteps": [
+    {
+      "key": "phase-models",
+      "blockedBy": ["phase-tests"],
+      "supportingTasks": ["T013", "T014", "T015", "T016", "T017", "T018", "T019", "T020", "T021", "T022", "T023", "T024", "T025"]
+    },
+    {
+      "key": "phase-services",
+      "blockedBy": ["phase-models"],
+      "supportingTasks": ["T026", "T027", "T028", "T029", "T030", "T031", "T032", "T033"]
+    },
+    {
+      "key": "phase-cli",
+      "blockedBy": ["phase-services"],
+      "supportingTasks": ["T034", "T035", "T036", "T037", "T038"]
+    },
+    {
+      "key": "phase-ci",
+      "blockedBy": ["phase-cli"],
+      "supportingTasks": ["T039", "T040", "T041", "T042"]
+    },
+    {
+      "key": "phase-polish",
+      "blockedBy": ["phase-ci"],
+      "supportingTasks": ["T043", "T044", "T045", "T046", "T047"]
+    }
+  ],
+  "audit": {
+    "generatedBy": "delegate",
+    "gitRef": "001-create-a-structured",
+    "inputs": [
+      "specs/001-create-a-structured/tasks.md",
+      "specs/001-create-a-structured/plan.md"
+    ]
+  }
+}

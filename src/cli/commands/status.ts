@@ -20,22 +20,14 @@ export async function statusCommand(args: string[], context: CliContext): Promis
     status: session.status,
     needsUserInput: session.needsUserInput,
     updatedAt: session.updatedAt,
-    createdAt: session.createdAt,
-    summary: session.summary ?? '',
-    pullRequestUrl: session.pullRequestUrl ?? null,
-    approvals: session.approvals,
-    repository: session.repository,
   };
 
   if (format === 'json') {
     writeJson(context.stdout, payload);
   } else {
-    const prLine = payload.pullRequestUrl ? ` PR: ${payload.pullRequestUrl}` : '';
-    const summaryLine = payload.summary ? ` Summary: ${payload.summary}` : '';
-    const approvalsLine = payload.approvals.length > 0 ? ` Approvals: ${payload.approvals.join(', ')}` : '';
     writeLine(
       context.stdout,
-      `Session ${session.id} is ${session.status} (needs input: ${session.needsUserInput}).${prLine}${summaryLine}${approvalsLine}`
+      `Session ${session.id} is ${session.status} (needs input: ${session.needsUserInput}). Updated ${session.updatedAt}`
     );
   }
 

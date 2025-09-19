@@ -12,10 +12,20 @@ import cancelCommand from './commands/cancel';
 import resultCommand from './commands/result';
 import approveCommand from './commands/approve';
 import denyCommand from './commands/deny';
+import claimCommand from './commands/claim';
+import completeCommand from './commands/complete';
+import gateCommand from './commands/gate';
+import exportCommand from './commands/export';
 import type { CliContext, CommandHandler } from './types';
 import { AuthService } from '../services/authService';
-import { SessionService } from '../services/sessionService';
-import { AuthError, isServiceError, ServiceError, UnexpectedError, ValidationError } from '../services/errors';
+import { SessionService, type RunnerMode } from '../services/sessionService';
+import {
+  AuthError,
+  isServiceError,
+  ServiceError,
+  UnexpectedError,
+  ValidationError,
+} from '../services/errors';
 import { attemptAutoLogin, ensureAuthenticated } from './auth/autoLogin';
 
 const COMMANDS: Record<string, CommandHandler> = {
@@ -29,6 +39,10 @@ const COMMANDS: Record<string, CommandHandler> = {
   result: resultCommand,
   approve: approveCommand,
   deny: denyCommand,
+  claim: claimCommand,
+  complete: completeCommand,
+  gate: gateCommand,
+  export: exportCommand,
 };
 
 function envTruthy(value: string | undefined): boolean {
@@ -44,9 +58,12 @@ function createContext(verbose: boolean, cwdOverride?: string): CliContext {
   const agentHome = env.COPILOT_AGENT_HOME ?? join(homedir(), '.copilot-agent');
   const cwd = resolveWorkingDirectory(cwdOverride);
   const authService = new AuthService({ agentHome, env });
+  const runnerMode: RunnerMode =
+    (env.COPILOT_AGENT_RUNNER_MODE as RunnerMode | undefined) ??
+    (env.COPILOT_CLI_TEST_MODE ? 'stub' : 'cli');
   const sessionService = new SessionService({
     agentHome,
-    runnerMode: env.COPILOT_CLI_TEST_MODE ? 'stub' : 'cli',
+    runnerMode,
     authService,
   });
   return {
@@ -92,9 +109,12 @@ function resolveWorkingDirectory(cwdOverride: string | undefined): string {
   return resolved;
 }
 
-function extractCommandArgs(
-  rawArgs: string[]
-): { commandName: string | undefined; args: string[]; verbose: boolean; cwdOverride?: string } {
+function extractCommandArgs(rawArgs: string[]): {
+  commandName: string | undefined;
+  args: string[];
+  verbose: boolean;
+  cwdOverride?: string;
+} {
   const args: string[] = [];
   let verbose = false;
   let commandName: string | undefined;
@@ -200,7 +220,8 @@ async function run(): Promise<void> {
     return;
   }
 
-  const shouldEnsureAuth = commandName !== 'login' && commandName !== 'logout' && !context.env.COPILOT_CLI_TEST_MODE;
+  const shouldEnsureAuth =
+    commandName !== 'login' && commandName !== 'logout' && !context.env.COPILOT_CLI_TEST_MODE;
 
   try {
     if (shouldEnsureAuth) {
@@ -246,7 +267,7 @@ async function maybeRetryWithAutoLogin(
   error: unknown,
   command: CommandHandler,
   args: string[],
-  context: CliContext
+  context: CliContext,
 ): Promise<boolean> {
   if (!(error instanceof AuthError)) {
     return false;

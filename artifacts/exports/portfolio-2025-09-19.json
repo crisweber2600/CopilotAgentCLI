@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2025-09-19T16:45:00.000Z",
+  "items": [
+    {
+      "workItemId": "work-item-001-create-a-structured",
+      "workflowId": "wf-001-create-a-structured@1.0.0",
+      "status": "in-progress",
+      "currentStepKey": "phase-tests",
+      "completedTasks": ["T001", "T002", "T003", "T004"],
+      "pendingTasks": [
+        "T005",
+        "T006",
+        "T007",
+        "T008",
+        "T009",
+        "T010",
+        "T011",
+        "T012",
+        "T013",
+        "T014",
+        "T015",
+        "T016",
+        "T017",
+        "T018",
+        "T019",
+        "T020",
+        "T021",
+        "T022",
+        "T023",
+        "T024",
+        "T025",
+        "T026",
+        "T027",
+        "T028",
+        "T029",
+        "T030",
+        "T031",
+        "T032",
+        "T033",
+        "T034",
+        "T035",
+        "T036",
+        "T037",
+        "T038",
+        "T039",
+        "T040",
+        "T041",
+        "T042",
+        "T043",
+        "T044",
+        "T045",
+        "T046",
+        "T047"
+      ],
+      "metrics": {
+        "leadTimeDays": 0,
+        "cycleTimeByStep": {
+          "phase-setup": 1
+        },
+        "wip": 1,
+        "reworkRate": 0
+      },
+      "lastArtifact": "artifacts/handoff/2025-09-19T15-45-00Z-work-item-001-create-a-structured-phase-setup-attempt-phase-setup.json"
+    }
+  ]
+}

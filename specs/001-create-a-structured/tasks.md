@@ -41,10 +41,10 @@
 
 ## Phase 3.1: Setup
 
-- [ ] T001 Create project skeleton per implementation plan: `src/`, `tests/`, `.github/workflows/`, `artifacts/` (+ subfolders), add `.gitkeep` placeholders where needed.
-- [ ] T002 Initialize Node+TypeScript project: `package.json`, `tsconfig.json`, `vitest.config.ts`; add scripts (`build`, `test`, `lint`, `format`); add devDeps: `typescript`, `vitest`, `@types/node`, `ts-node`, `eslint`, `prettier`, `ajv`.
-- [ ] T003 [P] Configure lint/format: `.eslintrc.cjs`, `.prettierrc`, `lint-staged` (pre-commit optional), enforce strict TS in `tsconfig.json`.
-- [ ] T004 [P] Seed `artifacts/` structure: `workflows/`, `work-items/`, `claims/`, `schedule/`, `handoff/`, `gates/`, `exports/` with example stub files for tests.
+- [ ] T001 Scaffold single-project layout per plan.md: create `src/{models,services,cli/commands,lib}`, `tests/{contract,integration,unit,performance}`, `artifacts/{workflows,work-items,claims,schedule,handoff,gates,exports}`, and `.github/workflows/`; add `.gitkeep` placeholders matching quickstart file expectations.
+- [ ] T002 Initialize Node+TypeScript workspace: configure `package.json` scripts (`build`, `test`, `lint`, `format`, `check:schema`), install devDependencies (`typescript`, `ts-node`, `vitest`, `@types/node`, `eslint`, `@typescript-eslint/{parser,eslint-plugin}`, `prettier`, `ajv`, `yaml`) per plan; author `tsconfig.json` targeting ES2022 with `module`=`CommonJS`, `moduleResolution`=`Node`, baseline strictness (`noImplicitAny`, `strictNullChecks`), plus `vitest.config.ts` for Node runtime.
+- [ ] T003 [P] Configure lint/format tooling: set up `.eslintrc.cjs` with `@typescript-eslint` recommended + strict rules (no-floating-promises, consistent-type-imports), integrate Prettier plugin, provide `.prettierrc` (2 spaces, 100 char width) and optional `lint-staged` hook; ensure tsconfig enables incremental builds and source maps to support FR-009 auditability.
+- [ ] T004 [P] Seed `artifacts/` structure with representative stubs: add demo workflow (sequential step A, parallelizable steps B and C, finish step D) under `artifacts/workflows/`, bind sample work item in `artifacts/work-items/`, and create placeholder schedule, claim, gate, handoff, and exports files (schemaVersion `1.0`) to exercise quickstart scenarios.
 
 ---
 
@@ -52,78 +52,78 @@
 
 **Contract Test(s)**
 
-- [ ] T005 [P] Contract test: validate handoff artifact schema in `tests/contract/handoff_artifact_schema.test.ts` against `specs/001-create-a-structured/handoff-artifact.schema.json` using `ajv`.
+- [ ] T005 [P] Contract test for handoff artifacts (FR-014): in `tests/contract/handoff_artifact_schema.test.ts` load `specs/001-create-a-structured/contracts/handoff-artifact.schema.json` via AJV draft-07, validate a compliant fixture covering enum `eventType` values and `baselineIntegration` states, and assert failures when required fields are omitted.
 
 **Integration Tests (from quickstart & spec acceptance)**
 
-- [ ] T006 [P] Deterministic scheduling emission (sequential default; parallel branches; stable lexical tie‑break): `tests/integration/scheduling_determinism.test.ts` (reads `artifacts/workflows/*.yaml|json` and expects ordered `artifacts/schedule/{id}.json`).
-- [ ] T007 [P] Exclusive claim semantics via claim file (one executor per attempt until terminal): `tests/integration/claim_semantics.test.ts` (creates `artifacts/claims/{attemptId}.json`, verifies re-queue on retry).
-- [ ] T008 [P] Handoff artifact commit & consumption flow: `tests/integration/handoff_artifact_flow.test.ts` (produces `artifacts/handoff/*` and validates required fields + linkage).
-- [ ] T009 [P] Gate review reject path → rework & re-entry criteria: `tests/integration/gate_rework_flow.test.ts` (writes `artifacts/gates/{workItem}/{gateKey}.json` and verifies step rewind).
-- [ ] T010 [P] Baseline integration boundary semantics (pre→post integration rules, explicit revert before re-exec): `tests/integration/baseline_integration_boundary.test.ts`.
-- [ ] T011 [P] Portfolio exports snapshot: `tests/integration/exports_snapshot.test.ts` (expects files under `artifacts/exports/` with item histories).
+- [ ] T006 [P] Deterministic scheduling integration test (FR-005, quickstart step 2): in `tests/integration/scheduling_determinism.test.ts` use the seeded workflow/work item to assert `scheduling_service` emits `artifacts/schedule/{workItemId}.json` with ready steps sorted by order, parallel branches B and C launched together, lexical tie-break by step key, and audit metadata captured.
+- [ ] T007 [P] Exclusive claim semantics integration test (FR-027, research item 1): in `tests/integration/claim_semantics.test.ts` simulate two executors reading the same ready attempt, ensure `assignment_service` writes `artifacts/claims/{attemptId}.json` with executor metadata and rejects duplicate claims until terminal state, issuing new attempt identifiers on retry.
+- [ ] T008 [P] Handoff artifact flow integration test (FR-014, FR-010): in `tests/integration/handoff_artifact_flow.test.ts` drive CLI/services to produce `artifacts/handoff/{timestamp}-{workItem}-{stepKey}-{attemptId}.json`, validate against schema, confirm baseline integration flag handling, and ensure the consumer reads the artifact before advancing.
+- [ ] T009 [P] Gate review reject path integration test (FR-006, FR-021): in `tests/integration/gate_rework_flow.test.ts` cover `gate_service` writing `artifacts/gates/{workItem}/{gateKey}.json` with reject reasons, verify the work item rewinds to the target step, re-entry criteria are enforced, and the rework counter increments.
+- [ ] T010 [P] Baseline integration boundary integration test (FR-010, FR-029): in `tests/integration/baseline_integration_boundary.test.ts` simulate attempt completion followed by a baseline integration artifact, assert re-execution requires an explicit revert artifact and the orchestrator enforces a single active session per work item.
+- [ ] T011 [P] Portfolio exports integration test (FR-013, FR-017, FR-026): in `tests/integration/exports_snapshot.test.ts` invoke the export command to aggregate history and metrics into `artifacts/exports/{timestamp}.json` or `.csv`, asserting lead and cycle time, WIP, rework rate, gate decisions, and artifact links are present.
 
 **Unit Tests (core rules)**
 
-- [ ] T012 [P] Tie‑break by step key lexical order for equal indices: `tests/unit/scheduling_tiebreak.test.ts`.
+- [ ] T012 [P] Scheduling tie-break unit test (FR-005): in `tests/unit/scheduling_tiebreak.test.ts` verify `scheduling_service` sorts equal-order steps by lexical step key and produces deterministic `launchOrder` snapshots across runs.
 
 ---
 
 ## Phase 3.3: Core Implementation (ONLY after tests are failing)
 
-**Models (from data-model.md)** — one file per entity
+**Models (from data-model.md) — one file per entity**
 
-- [ ] T013 [P] `src/models/workflow.ts` (Workflow)
-- [ ] T014 [P] `src/models/step.ts` (Step)
-- [ ] T015 [P] `src/models/work_item.ts` (WorkItem)
-- [ ] T016 [P] `src/models/attempt.ts` (Attempt)
-- [ ] T017 [P] `src/models/assignment.ts` (Assignment)
-- [ ] T018 [P] `src/models/executor.ts` (Executor)
-- [ ] T019 [P] `src/models/gate_review.ts` (GateReview)
-- [ ] T020 [P] `src/models/scheduling_decision.ts` (SchedulingDecision)
-- [ ] T021 [P] `src/models/handoff_artifact.ts` (HandoffArtifact)
-- [ ] T022 [P] `src/models/baseline_integration.ts` (BaselineIntegration)
-- [ ] T023 [P] `src/models/blocker.ts` (Blocker)
-- [ ] T024 [P] `src/models/audit_record.ts` (AuditRecord)
-- [ ] T025 [P] `src/models/metric_set.ts` (MetricSet)
+- [ ] T013 [P] Implement `src/models/workflow.ts` per data-model.md: define workflow id, name, version, and effective dates, hold ordered `Step[]`, enforce unique keys plus ascending order, and expose helpers (`getStep`, `listParallelizable`, `snapshotForAudit`).
+- [ ] T014 [P] Implement `src/models/step.ts` capturing key, order, parallelizable flag, entryCriteria, exitCriteria, responsibleRole, and optional gate metadata; validate positive order and non-empty exit criteria.
+- [ ] T015 [P] Implement `src/models/work_item.ts` with fields (id, workflowId, status enum, currentStepKey, owner, createdAt, updatedAt, links[]), methods to advance or rewind, compute pending exit criteria, and attach audit references (FR-002, FR-015).
+- [ ] T016 [P] Implement `src/models/attempt.ts` including attemptId, workItemId, stepKey, status (`queued|running|completed|rejected|failed|rework`), timestamps, artifactLinks[], helper `isTerminal`, and factory for retry attempts honoring FR-027.
+- [ ] T017 [P] Implement `src/models/assignment.ts` for exclusive claims (attemptId, executorId, claimedAt, releasedAt, terminalState); guard against multiple active assignments and record history per FR-027.
+- [ ] T018 [P] Implement `src/models/executor.ts` capturing executor id, name, capacity (equals 1), and metadata with helpers to report availability and utilization for metrics.
+- [ ] T019 [P] Implement `src/models/gate_review.ts` storing gate decision data (id, workItemId, stepKey, decision, reasons[], reviewer, timestamp) plus helper to determine re-entry status (FR-006).
+- [ ] T020 [P] Implement `src/models/scheduling_decision.ts` to capture ready steps, launchOrder, assignments, timestamp, and rationale notes supporting audit requirements (FR-005, FR-009).
+- [ ] T021 [P] Implement `src/models/handoff_artifact.ts` aligned with the schema (workflow, step, eventType, attemptId, timestamp, actor, outcome, nextAction, baselineIntegration, links, schemaVersion) with validation for the file naming pattern from research (FR-014).
+- [ ] T022 [P] Implement `src/models/baseline_integration.ts` capturing baseline events (id or path, workItemId, timestamp, mergedBy, baseBranch) and references to related handoff artifacts enforcing FR-010.
+- [ ] T023 [P] Implement `src/models/blocker.ts` (id, workItemId, type, startAt, optional endAt, owner, notes) including helpers to compute duration and impact metrics (FR-012).
+- [ ] T024 [P] Implement `src/models/audit_record.ts` capturing immutable change history (id, entityType, entityId, who, what, why, when, prev?, next?) with linkage to git metadata (FR-009).
+- [ ] T025 [P] Implement `src/models/metric_set.ts` storing scope (item, workflow, or portfolio) and measures {leadTime, cycleTimePerStep, throughput, WIP, reworkRate}; provide aggregation helpers for exports (FR-013).
 
 **Services**
 
-- [ ] T026 [P] `src/services/workflow_registry.ts` — load & validate workflow defs from `artifacts/workflows/`.
-- [ ] T027 [ ] `src/services/scheduling_service.ts` — deterministic schedule engine (FR‑005).
-- [ ] T028 [P] `src/services/assignment_service.ts` — exclusive claims, retry→new attempt (FR‑027).
-- [ ] T029 [P] `src/services/artifact_service.ts` — write/validate handoff artifacts; schema validation via AJV (FR‑014).
-- [ ] T030 [P] `src/services/git_service.ts` — commit/push helpers; detect base branch for baseline integration.
-- [ ] T031 [P] `src/services/work_item_service.ts` — track status, current step, remaining exit criteria.
-- [ ] T032 [P] `src/services/gate_service.ts` — approve/reject with reasons; re-entry checks.
-- [ ] T033 [P] `src/services/metrics_service.ts` — compute lead time, cycle time per step, throughput, WIP, rework rate.
+- [ ] T026 [P] Implement `src/services/workflow_registry.ts`: load YAML or JSON from `artifacts/workflows/`, validate with models (unique step keys, gate definitions, version windows), cache results, and expose lookup helpers for work items.
+- [ ] T027 Implement `src/services/scheduling_service.ts` (FR-005, FR-028): compute deterministic ready steps, honor parallelizable flags, apply lexical tie-break, persist `SchedulingDecision` plus `artifacts/schedule/{workItemId}.json`, and emit audit records.
+- [ ] T028 [P] Implement `src/services/assignment_service.ts` (FR-027): manage claim lifecycle by creating `artifacts/claims/{attemptId}.json` with executor metadata, block double claims, open retry attempts, and use `git_service` for commit and push.
+- [ ] T029 [P] Implement `src/services/artifact_service.ts` (FR-014, FR-010): wrap AJV validation, build handoff payloads, write to `artifacts/handoff/` using the timestamp-workItem-stepKey-attemptId naming pattern, and register audit entries.
+- [ ] T030 [P] Implement `src/services/git_service.ts`: detect the base branch (default `main`), provide commit and push with retry, log baseline integration events, and expose helpers for CLI and workflows per plan.md.
+- [ ] T031 [P] Implement `src/services/work_item_service.ts`: manage lifecycle (status and currentStepKey), evaluate entry and exit criteria, coordinate re-entry after gates, and surface pending actions (FR-002, FR-015, FR-021).
+- [ ] T032 [P] Implement `src/services/gate_service.ts`: process approve or reject decisions with reasons, enforce re-entry criteria, emit `GateReview` artifacts, and update work item state (FR-006, FR-021).
+- [ ] T033 [P] Implement `src/services/metrics_service.ts`: compute lead and cycle times, throughput, WIP, and rework rate using attempts and blockers, and surface portfolio roll-ups for exports (FR-013, FR-017).
 
 **CLI Commands (map to quickstart & research patterns)**
 
-- [ ] T034 [ ] Extend `src/cli/commands/delegate.ts` — compute schedule and emit `artifacts/schedule/{id}.json`.
-- [ ] T035 [P] `src/cli/commands/claim.ts` — claim attempt and write `artifacts/claims/{attemptId}.json` with executor metadata.
-- [ ] T036 [P] `src/cli/commands/complete.ts` — on completion, emit handoff artifact under `artifacts/handoff/`.
-- [ ] T037 [P] `src/cli/commands/gate.ts` — record gate decision under `artifacts/gates/{workItem}/{gateKey}.json`.
-- [ ] T038 [P] `src/cli/commands/export.ts` — write portfolio/item history snapshots to `artifacts/exports/`.
+- [ ] T034 Extend `src/cli/commands/delegate.ts`: load workflow and work item context, call `scheduling_service`, write `artifacts/schedule/{workItemId}.json` including `launchOrder` and explanation fields, and echo a summary per quickstart step 2.
+- [ ] T035 [P] Implement `src/cli/commands/claim.ts`: accept work item or attempt arguments, invoke `assignment_service` to create a claim artifact with executor metadata (machine name, Actions run id), commit via `git_service`, and confirm exclusive claim (FR-027).
+- [ ] T036 [P] Implement `src/cli/commands/complete.ts`: finalize attempts, trigger `artifact_service` to write handoff artifacts (FR-014) with the naming pattern and baselineIntegration flag, update work item state, and optionally request baseline integration follow-up.
+- [ ] T037 [P] Implement `src/cli/commands/gate.ts`: capture gate decisions (approve or reject) with reasons, call `gate_service`, persist `artifacts/gates/{workItem}/{gateKey}.json`, and on reject invoke `work_item_service` requeue logic (FR-006, FR-021).
+- [ ] T038 [P] Implement `src/cli/commands/export.ts`: orchestrate `metrics_service` to produce portfolio and item snapshots, write `artifacts/exports/{timestamp}.json` (and CSV if requested) with filters (time range, workflow, owner) per spec FR-017.
 
 ---
 
 ## Phase 3.4: Integration
 
-- [ ] T039 `.github/workflows/orchestrator.yml` — single orchestrator job; emits matrix of ready attempts in stable launch order; set concurrency key per work item.
-- [ ] T040 `.github/workflows/execute.yml` — matrix executor jobs; each claims one attempt (uses CLI `claim`), runs step, calls `complete` on finish.
-- [ ] T041 `.github/workflows/collector.yml` — collector job to batch-commit produced artifacts (optional path if direct commits are disabled on runners).
-- [ ] T042 `src/lib/logger.ts` — structured logging; wire into services/CLI.
+- [ ] T039 `.github/workflows/orchestrator.yml`: orchestrate a single job per plan.md that runs the delegate command, reads `artifacts/work-items/`, emits a matrix of ready attempts ordered by `launchOrder`, sets a concurrency key per work item, and uploads schedule artifacts for executors.
+- [ ] T040 `.github/workflows/execute.yml`: define matrix executor jobs where each entry claims one attempt via the CLI, runs a step shell hook, calls `complete` and `gate` on finish, and handles failure by marking the attempt failed so the orchestrator requeues (quickstart steps 3 through 5, FR-028).
+- [ ] T041 `.github/workflows/collector.yml`: optional collector job that downloads run artifacts or checks out the repo, aggregates new handoff, gate, and export files, commits via `git_service` with attempt references, preserving tamper-evident history (FR-029).
+- [ ] T042 `src/lib/logger.ts`: provide structured logging with context fields (workItemId, attemptId, stepKey, executor, gitSha), JSON output for CI, and integration hooks for services and CLI.
 
 ---
 
 ## Phase 3.5: Polish
 
-- [ ] T043 [P] Unit tests for error handling/recovery paths (invalid workflow state, missing artifacts): `tests/unit/error_handling.test.ts`.
-- [ ] T044 Performance tests for schedule engine: `tests/performance/scheduling_perf.test.ts` (target: deterministic ordering; execution under typical constraints).
-- [ ] T045 [P] Update docs: refresh `specs/001-create-a-structured/quickstart.md`; add `docs/ci-orchestration.md` covering GH Actions patterns.
-- [ ] T046 Code cleanup: remove duplication, tighten types, doc comments.
-- [ ] T047 Create & run manual checklist: `specs/001-create-a-structured/manual-testing.md` (cover quickstart flows).
+- [ ] T043 [P] Add `tests/unit/error_handling.test.ts` covering FR-025 recovery paths (invalid workflow state, missing artifacts, conflicting gate decisions) with expected user guidance.
+- [ ] T044 Implement `tests/performance/scheduling_perf.test.ts` to stress `scheduling_service` across large workflows, asserting deterministic ordering and acceptable runtime under typical executor pool constraints.
+- [ ] T045 [P] Refresh `specs/001-create-a-structured/quickstart.md` with CLI and CI command syntax and add `docs/ci-orchestration.md` documenting orchestrator, execute, and collector patterns, concurrency keys, artifact naming, and baseline integration flow (plan.md, research.md).
+- [ ] T046 Perform code cleanup: remove duplication, tighten TypeScript types, add targeted doc comments for complex flows, ensure metrics and audit utilities are shared, and rerun lint and format commands.
+- [ ] T047 Create `specs/001-create-a-structured/manual-testing.md` checklist covering quickstart steps 1 through 7, gate rejection, retry attempt flow, baseline integration validation, and export verification with expected artifacts and commands.
 
 ---
 

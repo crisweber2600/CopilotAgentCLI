@@ -1,0 +1,121 @@
+id: wf-001-create-a-structured
+name: Implement Plan-to-Execution Orchestrator (001-create-a-structured)
+version: 1.0.0
+effectiveFrom: 2025-09-19T00:00:00Z
+steps:
+  - key: phase-setup
+    order: 1
+    parallelizable: false
+    entryCriteria:
+      - Feature branch `001-create-a-structured` checked out
+      - Plan.md, research.md, data-model.md, quickstart.md reviewed
+    exitCriteria:
+      - T001 scaffold complete across src/tests/artifacts/.github paths
+      - T002 Node/TypeScript workspace configured with scripts and deps
+      - T003 lint/format tooling active and strict TS flags enabled
+      - T004 artifacts seeded to mirror task list inputs
+    responsibleRole: implementation-lead
+    supportingTasks:
+      - T001
+      - T002
+      - T003
+      - T004
+  - key: phase-tests
+    order: 2
+    parallelizable: false
+    entryCriteria:
+      - Setup phase completed with artifacts committed
+    exitCriteria:
+      - Contract test T005 and integration tests T006-T011 authored and failing
+      - Unit test T012 authored and failing
+    responsibleRole: quality-engineer
+    supportingTasks:
+      - T005
+      - T006
+      - T007
+      - T008
+      - T009
+      - T010
+      - T011
+      - T012
+  - key: phase-models
+    order: 3
+    parallelizable: true
+    entryCriteria:
+      - Tests authored for model-facing functionality
+    exitCriteria:
+      - Model classes T013-T025 implemented with validation helpers
+    responsibleRole: domain-engineer
+    supportingTasks:
+      - T013
+      - T014
+      - T015
+      - T016
+      - T017
+      - T018
+      - T019
+      - T020
+      - T021
+      - T022
+      - T023
+      - T024
+      - T025
+  - key: phase-services
+    order: 4
+    parallelizable: true
+    entryCriteria:
+      - Models available for dependency injection
+    exitCriteria:
+      - Services T026-T033 implemented and passing authored tests
+    responsibleRole: backend-engineer
+    supportingTasks:
+      - T026
+      - T027
+      - T028
+      - T029
+      - T030
+      - T031
+      - T032
+      - T033
+  - key: phase-cli
+    order: 5
+    parallelizable: false
+    entryCriteria:
+      - Services stable and exported
+    exitCriteria:
+      - CLI commands T034-T038 wired to services and validated
+    responsibleRole: cli-engineer
+    supportingTasks:
+      - T034
+      - T035
+      - T036
+      - T037
+      - T038
+  - key: phase-ci
+    order: 6
+    parallelizable: false
+    entryCriteria:
+      - CLI commands available to workflows
+    exitCriteria:
+      - GitHub workflows T039-T041 operational and logger available (T042)
+    responsibleRole: devops-engineer
+    supportingTasks:
+      - T039
+      - T040
+      - T041
+      - T042
+  - key: phase-polish
+    order: 7
+    parallelizable: false
+    entryCriteria:
+      - CI workflows passing end-to-end
+    exitCriteria:
+      - T043-T047 complete with documentation, cleanup, manual checklist
+    responsibleRole: release-engineer
+    supportingTasks:
+      - T043
+      - T044
+      - T045
+      - T046
+      - T047
+schemaVersion: 1.0

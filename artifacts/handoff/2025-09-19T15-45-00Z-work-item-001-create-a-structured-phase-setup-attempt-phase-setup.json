@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "1.0",
+  "workItemId": "work-item-001-create-a-structured",
+  "workflow": {
+    "name": "Implement Plan-to-Execution Orchestrator (001-create-a-structured)",
+    "version": "1.0.0"
+  },
+  "step": {
+    "key": "phase-setup",
+    "order": 1
+  },
+  "eventType": "attempt-completed",
+  "attemptId": "attempt-phase-setup",
+  "timestamp": "2025-09-19T15:45:00.000Z",
+  "actor": "Implementation Lead",
+  "outcome": "Scaffolded directories, configured Node/TS project, added lint/format tooling, and seeded artifacts aligned to tasks T001-T004.",
+  "nextAction": "Author contract and integration tests for tasks T005-T012.",
+  "baselineIntegration": "pre",
+  "links": [
+    "artifacts/claims/attempt-phase-setup.json",
+    "specs/001-create-a-structured/tasks.md"
+  ]
+}

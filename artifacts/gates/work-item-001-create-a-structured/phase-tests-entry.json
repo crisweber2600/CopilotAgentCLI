@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "1.0",
+  "workItemId": "work-item-001-create-a-structured",
+  "gateKey": "phase-tests-entry",
+  "decision": "approve",
+  "reasons": [
+    "Setup artifacts validated against plan",
+    "Repository ready for T005-T012 test authoring"
+  ],
+  "reviewer": "quality-lead@example.com",
+  "decidedAt": "2025-09-19T16:15:00.000Z"
+}

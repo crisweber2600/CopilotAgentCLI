@@ -1,4 +1,4 @@
-import { ValidationError } from '../../services/errors';
+import { ValidationError, isServiceError } from '../../services/errors';
 import type { CliContext } from '../types';
 import { parseArgs, resolveOutputFormat, writeJson, writeLine } from '../utils';
 
@@ -13,7 +13,21 @@ export async function cancelCommand(args: string[], context: CliContext): Promis
   await context.authService.requireSession();
 
   const format = resolveOutputFormat(parsed, context.ciDefaultJson);
-  const session = await context.sessionService.cancel(id);
+  let session;
+  try {
+    session = await context.sessionService.cancel(id);
+  } catch (error) {
+    if (isServiceError(error) && error.exitCode === 6) {
+      const latest = await context.sessionService.get(id);
+      if (latest.status === 'cancelled') {
+        session = latest;
+      } else {
+        throw error;
+      }
+    } else {
+      throw error;
+    }
+  }
 
   const payload = { id: session.id, status: session.status };
 
