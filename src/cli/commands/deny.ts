@@ -1,17 +1,28 @@
-import { ValidationError } from '../../services/errors';
-import type { CliContext } from '../types';
-import { getStringFlag, parseArgs, resolveOutputFormat, writeJson, writeLine } from '../utils';
+import { ValidationError } from "../../services/errors";
+import type { CliContext } from "../types";
+import {
+  getStringFlag,
+  parseArgs,
+  resolveOutputFormat,
+  writeJson,
+  writeLine,
+} from "../utils";
 
-export async function denyCommand(args: string[], context: CliContext): Promise<number> {
+export async function denyCommand(
+  args: string[],
+  context: CliContext,
+): Promise<number> {
   const parsed = parseArgs(args);
   const id = parsed.positionals[0];
   if (!id) {
-    throw new ValidationError('Session id is required to deny a pending action.');
+    throw new ValidationError(
+      "Session id is required to deny a pending action.",
+    );
   }
 
   await context.authService.requireSession();
 
-  const reason = getStringFlag(parsed, 'reason');
+  const reason = getStringFlag(parsed, "reason");
   const format = resolveOutputFormat(parsed, context.ciDefaultJson);
   const result = await context.sessionService.deny(id, { reason });
 
@@ -22,10 +33,13 @@ export async function denyCommand(args: string[], context: CliContext): Promise<
     updatedAt: result.updatedAt,
   };
 
-  if (format === 'json') {
+  if (format === "json") {
     writeJson(context.stdout, payload);
   } else {
-    writeLine(context.stdout, `Denied session ${result.id}. Status is now ${result.status}.`);
+    writeLine(
+      context.stdout,
+      `Denied session ${result.id}. Status is now ${result.status}.`,
+    );
   }
 
   return 0;
