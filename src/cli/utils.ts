@@ -83,6 +83,22 @@ export function getBooleanFlag(parsed: ParsedArgs, name: string): boolean {
   return false;
 }
 
+export function getNumberFlag(parsed: ParsedArgs, name: string): number | undefined {
+  const value = parsed.flags[name];
+  const stringValue = Array.isArray(value) ? value[value.length - 1] : value;
+  
+  if (typeof stringValue === 'number') {
+    return stringValue;
+  }
+  
+  if (typeof stringValue === 'string') {
+    const parsed = parseInt(stringValue, 10);
+    return isNaN(parsed) ? undefined : parsed;
+  }
+  
+  return undefined;
+}
+
 export function hasFlag(parsed: ParsedArgs, name: string): boolean {
   return Object.prototype.hasOwnProperty.call(parsed.flags, name);
 }

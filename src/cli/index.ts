@@ -12,6 +12,9 @@ import cancelCommand from './commands/cancel';
 import resultCommand from './commands/result';
 import approveCommand from './commands/approve';
 import denyCommand from './commands/deny';
+import claimCommand from './commands/claim';
+import releaseCommand from './commands/release';
+import taskStatusCommand from './commands/task-status';
 import type { CliContext, CommandHandler } from './types';
 import { AuthService } from '../services/authService';
 import { SessionService } from '../services/sessionService';
@@ -29,6 +32,9 @@ const COMMANDS: Record<string, CommandHandler> = {
   result: resultCommand,
   approve: approveCommand,
   deny: denyCommand,
+  claim: claimCommand,
+  release: releaseCommand,
+  'task-status': taskStatusCommand,
 };
 
 function envTruthy(value: string | undefined): boolean {
@@ -141,16 +147,21 @@ function printHelp(): void {
     'Usage: copilot-cli <command> [options]',
     '',
     'Commands:',
-    '  login     Authenticate with the coding agent service',
-    '  logout    Clear authentication state',
-    '  delegate  Create a new delegated session',
-    '  status    Show the latest status for a session',
-    '  follow    Stream live updates for a session',
-    '  list      List sessions (optionally filtered by status)',
-    '  cancel    Cancel an active session',
-    '  approve   Approve a pending coding-agent action',
-    '  deny      Deny a pending coding-agent action',
-    '  result    Fetch the final result for a session',
+    '  login        Authenticate with the coding agent service',
+    '  logout       Clear authentication state',
+    '  delegate     Create a new delegated session',
+    '  status       Show the latest status for a session',
+    '  follow       Stream live updates for a session',
+    '  list         List sessions (optionally filtered by status)',
+    '  cancel       Cancel an active session',
+    '  approve      Approve a pending coding-agent action',
+    '  deny         Deny a pending coding-agent action',
+    '  result       Fetch the final result for a session',
+    '',
+    'Agent Swarmable Framework:',
+    '  claim        Claim a task for execution by an agent',
+    '  release      Release a claimed task back to the pool',
+    '  task-status  Show status of tasks in the swarmable framework',
     '',
     'Global options:',
     '  --verbose   Enable verbose error output',

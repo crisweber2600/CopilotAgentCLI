@@ -1,0 +1,183 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Agent-Swarmable Task Specification",
+  "description": "JSON Schema for NDJSON task specifications in the agent-swarmable framework",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "description",
+    "requires",
+    "inputs",
+    "outputs",
+    "branch",
+    "base_branch",
+    "claim",
+    "concurrency_key",
+    "retry_policy",
+    "done_when",
+    "pr"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^T[0-9]{3}$",
+      "description": "Unique task identifier in format T### (e.g., T001)"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "description": "Human-readable task name"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 10,
+      "description": "Detailed task description explaining what needs to be done"
+    },
+    "requires": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^T[0-9]{3}$"
+      },
+      "description": "Array of task IDs that must be completed before this task can start"
+    },
+    "parallel_group": {
+      "type": ["string", "null"],
+      "description": "Optional group name for tasks that can run in parallel"
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Array of file paths that this task requires as input"
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Array of file paths that this task will produce as output"
+    },
+    "branch": {
+      "type": "string",
+      "pattern": "^feat/[a-z0-9-]+__T[0-9]{3}$",
+      "description": "Git branch name for this task (feat/<feature-slug>__T###)"
+    },
+    "base_branch": {
+      "type": "string",
+      "pattern": "^feat/[a-z0-9-]+$",
+      "description": "Base branch that this task branch should be created from"
+    },
+    "claim": {
+      "type": "object",
+      "required": [
+        "status",
+        "by",
+        "since",
+        "lease_minutes",
+        "heartbeat_minutes"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "open",
+            "claimed",
+            "in_progress",
+            "blocked",
+            "done",
+            "abandoned"
+          ],
+          "description": "Current status of the task claim"
+        },
+        "by": {
+          "type": ["string", "null"],
+          "description": "Agent identifier that has claimed this task (null if unclaimed)"
+        },
+        "since": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp when the claim was last updated"
+        },
+        "lease_minutes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of minutes the lease is valid for"
+        },
+        "heartbeat_minutes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of minutes between required heartbeat updates"
+        }
+      },
+      "description": "Task claiming and lease management metadata"
+    },
+    "concurrency_key": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+::T[0-9]{3}$",
+      "description": "Unique key for preventing concurrent access to this task"
+    },
+    "retry_policy": {
+      "type": "object",
+      "required": ["max_retries", "backoff", "base_seconds"],
+      "properties": {
+        "max_retries": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum number of retry attempts allowed"
+        },
+        "backoff": {
+          "enum": ["linear", "exponential"],
+          "description": "Backoff strategy for retries"
+        },
+        "base_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Base delay in seconds for retry backoff calculation"
+        }
+      },
+      "description": "Retry policy for failed task attempts"
+    },
+    "done_when": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "description": "Array of completion criteria that must be satisfied"
+    },
+    "pr": {
+      "type": "object",
+      "required": ["title", "base", "head", "labels", "draft"],
+      "properties": {
+        "title": {
+          "type": "string",
+          "pattern": "^\\[T[0-9]{3}\\]",
+          "description": "Pull request title (must start with [T###])"
+        },
+        "base": {
+          "type": "string",
+          "description": "Base branch for the pull request"
+        },
+        "head": {
+          "type": "string",
+          "description": "Head branch for the pull request"
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Array of labels to apply to the pull request"
+        },
+        "draft": {
+          "type": "boolean",
+          "description": "Whether the pull request should be created as a draft"
+        }
+      },
+      "description": "Pull request configuration for this task"
+    }
+  }
+}
