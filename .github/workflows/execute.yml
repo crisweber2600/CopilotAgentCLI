@@ -1,0 +1,54 @@
+name: Execute Attempt
+
+on:
+  workflow_call:
+    inputs:
+      work-item-id:
+        required: true
+        type: string
+      ready-matrix:
+        required: true
+        type: string
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        attempt: ${{ fromJson(inputs.ready-matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: npm ci
+      - name: Build CLI
+        run: npm run build
+      - name: Claim attempt
+        env:
+          COPILOT_AGENT_HOME: ${{ runner.temp }}/copilot-agent
+        run: |
+          node dist/cli/index.js claim \
+            --work-item "${{ inputs['work-item-id'] }}" \
+            --step "${{ matrix.attempt.stepKey }}" \
+            --attempt "${{ matrix.attempt.stepKey }}-${{ matrix.attempt.order }}-${{ github.run_id }}" \
+            --json
+      - name: Run step
+        run: echo "Executing step ${{ matrix.attempt.stepKey }}"
+      - name: Complete attempt
+        env:
+          COPILOT_AGENT_HOME: ${{ runner.temp }}/copilot-agent
+        run: |
+          node dist/cli/index.js complete \
+            --work-item "${{ inputs['work-item-id'] }}" \
+            --step "${{ matrix.attempt.stepKey }}" \
+            --attempt "${{ matrix.attempt.stepKey }}-${{ matrix.attempt.order }}-${{ github.run_id }}" \
+            --outcome "Step completed by executor ${{ github.run_id }}" \
+            --next-action "Await orchestrator refresh" \
+            --json
+      - name: Upload handoff artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: handoff-${{ matrix.attempt.stepKey }}-${{ github.run_id }}
+          path: artifacts/handoff/

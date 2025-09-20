@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "1.0",
+  "workItemId": "work-item-001-create-a-structured",
+  "workflow": {
+    "name": "Implement Plan-to-Execution Orchestrator",
+    "version": "1.0.0"
+  },
+  "step": {
+    "key": "phase-setup",
+    "order": 1
+  },
+  "eventType": "attempt-completed",
+  "attemptId": "attempt-phase-setup",
+  "timestamp": "2025-09-19T15:45:00.000Z",
+  "actor": "Implementation Lead",
+  "outcome": "Scaffold created, configuration ready.",
+  "nextAction": "Author contract and integration tests.",
+  "baselineIntegration": "pre",
+  "links": [
+    "artifacts/claims/attempt-phase-setup.json"
+  ]
+}
