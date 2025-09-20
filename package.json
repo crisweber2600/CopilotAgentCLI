@@ -17,13 +17,26 @@
     "lint": "eslint --max-warnings=0 \"{src,tests}/**/*.ts\"",
     "format": "prettier --write \"{src,tests,specs,docs}/**/*.{ts,md,json}\"",
     "check:schema": "node scripts/check-schemas.mjs",
-    "speckit:sync": "node scripts/sync-speckit-artifacts.mjs"
+    "speckit:sync": "node scripts/sync-speckit-artifacts.mjs",
+    "prepare": "npm run build",
+    "package": "npm run clean && npm run build && npm pack"
   },
   "dependencies": {
     "ajv": "^8.17.1",
     "open": "^10.1.2",
     "yaml": "^2.6.0"
   },
+  "files": [
+    "dist",
+    "scripts/sync-speckit-artifacts.mjs",
+    "scripts/check-schemas.mjs",
+    "specs",
+    "artifacts",
+    "docs",
+    ".github/workflows",
+    "README.md",
+    "LICENSE"
+  ],
   "devDependencies": {
     "@types/node": "^22.16.3",
     "@typescript-eslint/eslint-plugin": "^8.13.0",

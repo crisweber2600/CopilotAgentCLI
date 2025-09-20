@@ -53,6 +53,11 @@ Use the following steps to adopt CopilotAgentCLI and its GitHub Actions automati
 - Run `npm run speckit:sync [feature-id]` after generating new Speckit outputs. The script in `scripts/sync-speckit-artifacts.mjs` inspects `specs/<feature-id>/tasks.md`, builds a deterministic workflow definition (`artifacts/workflows/wf-<feature-id>.yaml`), and seeds the corresponding work-item descriptor under `artifacts/work-items/`. Existing files are preserved unless you pass `--force`, ensuring repeatable generation without clobbering curated workflows.
 - Because the workflow generator consumes the exact markdown that Speckit emits (`spec.md`, `plan.md`, `tasks.md`), new features coming out of Speckit land with all of the structure that the CLI and GitHub Actions expect—ready to delegate via `copilot-cli delegate` and execute through the orchestrator/execute pipelines.
 
+### Publishing & Reuse
+- `npm run package` builds the CLI and produces a tarball (`copilot-cli-<version>.tgz`) that you can publish or attach to a release. The `files` allowlist ships `dist/`, GitHub workflow templates, seed artifacts, docs, and the Speckit sync script—everything downstream repos need.
+- When the package is installed via npm or git, the `prepare` script automatically compiles TypeScript so `node_modules/.bin/copilot-cli` is immediately usable.
+- Consumers can copy the bundled `.github/workflows/*.yml`, then execute `npx copilot-cli -- structured-work-item` commands as normal. To regenerate artifacts from Speckit outputs inside another repository, invoke the bundled script directly (for example `node node_modules/copilot-cli/scripts/sync-speckit-artifacts.mjs <feature-id>`).
+
 Because every workflow step delegates to the shipped CLI commands and services, integrating into a new project only requires aligning directory layout and installing the package. All runtime guarantees (deterministic scheduling, exclusive claims, baseline enforcement) are delivered by the existing code rather than by documentation.
 
 ## PR Auto Merge Workflow
