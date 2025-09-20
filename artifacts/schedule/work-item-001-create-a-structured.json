@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "1.0",
+  "workItemId": "work-item-001-create-a-structured",
+  "generatedAt": "2025-09-19T16:30:00.000Z",
+  "launchOrder": [
+    "phase-setup",
+    "phase-tests",
+    "phase-models",
+    "phase-services",
+    "phase-cli",
+    "phase-ci",
+    "phase-polish"
+  ],
+  "readySteps": [
+    {
+      "key": "phase-tests",
+      "order": 2,
+      "parallelizable": false,
+      "supportingTasks": ["T005", "T006", "T007", "T008", "T009", "T010", "T011", "T012"],
+      "notes": "Author contract and integration tests before implementation."
+    }
+  ],
+  "blockedSteps": [
+    {
+      "key": "phase-models",
+      "blockedBy": ["phase-tests"],
+      "supportingTasks": ["T013", "T014", "T015", "T016", "T017", "T018", "T019", "T020", "T021", "T022", "T023", "T024", "T025"]
+    }
+  ],
+  "audit": {
+    "generatedBy": "delegate",
+    "gitRef": "001-create-a-structured",
+    "inputs": [
+      "specs/001-create-a-structured/tasks.md",
+      "specs/001-create-a-structured/plan.md"
+    ]
+  }
+}

@@ -220,6 +220,44 @@ Creates actionable, dependency-ordered implementation tasks:
   - TDD approach (tests before implementation)
 - Task ordering: Setup → Tests → Models → Services → Endpoints → Integration → Polish
 
+### Task Execution and Progress Tracking
+
+When working on tasks from a `tasks.md` file:
+
+```bash
+# Example task file location: specs/[###-feature-name]/tasks.md
+```
+
+**Task Completion Protocol**:
+
+- Tasks use markdown checkboxes: `- [ ]` (incomplete) and `- [x]` (completed)
+- **ALWAYS** update the tasks.md file when a task is completed:
+  - Change `- [ ] T001 [P] Task description` to `- [x] T001 [P] Task description`
+  - Make this change in the same commit that completes the task
+- **VERIFY** task completion by checking file paths and requirements are met
+- **COMMIT** task file updates with descriptive messages: `"Complete T001: Task description"`
+
+**Task Identification Pattern**:
+
+- Tasks follow format: `- [ ] T### [P?] Description with file paths`
+- When completing work, find the matching task ID (T001, T002, etc.)
+- Update the checkbox status from `[ ]` to `[x]`
+- Include task ID in commit messages for traceability
+
+**File Location Examples**:
+
+- Feature specs: `specs/001-feature-name/tasks.md`
+- Project root: `tasks.md` (if applicable)
+- Always check the feature directory structure first
+- **Multiple features**: Each feature has its own tasks.md - update the relevant one
+
+**Best Practices**:
+
+- **Search** for task files: `find . -name "tasks.md" -type f`
+- **Match work** to the correct feature/specification
+- **Update immediately** when completing any task milestone
+- **Include context** in commit messages about which feature/task
+
 ### Prompt Workflow Integration
 
 These prompts work together in sequence:
@@ -227,6 +265,7 @@ These prompts work together in sequence:
 1. **Specify** → Creates feature branch and specification
 2. **Plan** → Generates design artifacts from specification
 3. **Tasks** → Creates executable task list from design artifacts
+4. **Implementation** → Execute tasks and update completion status
 
 Each prompt expects specific directory structure under `.specify/` with templates, scripts, and memory files.
 

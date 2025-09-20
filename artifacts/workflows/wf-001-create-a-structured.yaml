@@ -1,0 +1,90 @@
+id: wf-001-create-a-structured
+name: Implement Plan-to-Execution Orchestrator
+version: 1.0.0
+effectiveFrom: 2025-09-19T00:00:00Z
+steps:
+  - key: phase-setup
+    order: 1
+    parallelizable: false
+    entryCriteria:
+      - Feature branch ready
+    exitCriteria:
+      - T001 through T004 complete
+    responsibleRole: implementation-lead
+    supportingTasks:
+      - T001
+      - T002
+      - T003
+      - T004
+  - key: phase-tests
+    order: 2
+    parallelizable: false
+    entryCriteria:
+      - Phase setup completed
+    exitCriteria:
+      - T005 through T012 authored and failing
+    responsibleRole: quality-engineer
+    supportingTasks:
+      - T005
+      - T006
+      - T007
+      - T008
+      - T009
+      - T010
+      - T011
+      - T012
+  - key: phase-models
+    order: 3
+    parallelizable: true
+    entryCriteria:
+      - Test artifacts committed
+    exitCriteria:
+      - Models T013-T025 implemented
+    responsibleRole: domain-engineer
+    supportingTasks:
+      - T013
+      - T014
+      - T015
+      - T016
+      - T017
+      - T018
+      - T019
+      - T020
+      - T021
+      - T022
+      - T023
+      - T024
+      - T025
+  - key: phase-services
+    order: 4
+    parallelizable: true
+    entryCriteria:
+      - Models available
+    exitCriteria:
+      - Services T026-T033 ready
+    responsibleRole: backend-engineer
+  - key: phase-cli
+    order: 5
+    parallelizable: false
+    entryCriteria:
+      - Service layer verified
+    exitCriteria:
+      - CLI commands T034-T038 implemented
+    responsibleRole: cli-engineer
+  - key: phase-ci
+    order: 6
+    parallelizable: false
+    entryCriteria:
+      - CLI commands merged
+    exitCriteria:
+      - Workflows and logger (T039-T042) ready
+    responsibleRole: devops-engineer
+  - key: phase-polish
+    order: 7
+    parallelizable: false
+    entryCriteria:
+      - CI workflows pass locally
+    exitCriteria:
+      - Documentation, cleanup, manual tests (T043-T047) complete
+    responsibleRole: release-engineer
+schemaVersion: 1.0
