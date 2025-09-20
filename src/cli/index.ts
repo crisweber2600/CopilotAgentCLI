@@ -16,6 +16,7 @@ import claimCommand from './commands/claim';
 import completeCommand from './commands/complete';
 import gateCommand from './commands/gate';
 import exportCommand from './commands/export';
+import initCommand from './commands/init';
 import type { CliContext, CommandHandler } from './types';
 import { AuthService } from '../services/authService';
 import { SessionService, type RunnerMode } from '../services/sessionService';
@@ -43,7 +44,10 @@ const COMMANDS: Record<string, CommandHandler> = {
   complete: completeCommand,
   gate: gateCommand,
   export: exportCommand,
+  init: initCommand,
 };
+
+const OPTIONAL_AUTH_COMMANDS = new Set(['login', 'init']);
 
 function envTruthy(value: string | undefined): boolean {
   if (!value) {
@@ -156,10 +160,12 @@ async function main(rawArgs: string[]): Promise<number> {
   }
 
   const context = createContext(verbose, cwdOverride);
-  if (!context.env.COPILOT_CLI_TEST_MODE) {
-    await attemptAutoLogin(context);
+  if (!OPTIONAL_AUTH_COMMANDS.has(commandName)) {
+    if (!context.env.COPILOT_CLI_TEST_MODE) {
+      await attemptAutoLogin(context);
+    }
+    await ensureAuthenticated(context);
   }
-  await ensureAuthenticated(context);
 
   return command(args, context);
 }
