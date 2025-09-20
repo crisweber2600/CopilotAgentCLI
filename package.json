@@ -13,7 +13,7 @@
     "clean": "rm -rf dist",
     "cli": "node dist/cli/index.js",
     "test": "vitest",
-    "test:run": "vitest run",
+    "test:run": "VITEST_CJS=1 vitest run",
     "lint": "eslint --max-warnings=0 \"{src,tests}/**/*.ts\"",
     "format": "prettier --write \"{src,tests,specs,docs}/**/*.{ts,md,json}\"",
     "check:schema": "node scripts/check-schemas.mjs",

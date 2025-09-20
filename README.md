@@ -9,22 +9,22 @@ CopilotAgentCLI is a TypeScript-based CLI that operationalises the Plan-to-Execu
 - Durable state is written beneath `artifacts/` (`workflows/`, `work-items/`, `schedule/`, `claims/`, `handoff/`, `gates/`, `exports/`); the file layout matches what `ArtifactService` and GitHub Actions expect.
 - Test coverage is enforced through Vitest suites under `tests/contract/`, `tests/integration/`, `tests/unit/`, and `tests/performance/`. For example, `tests/integration/scheduling_determinism.test.ts` exercises `SchedulingService`, while `tests/integration/baseline_integration_boundary.test.ts` asserts the baseline guardrails inside `ArtifactService`.
 
-Tooling is managed via the checked-in `package.json` scripts (`build`, `test`, `lint`, `format`) and strict compiler rules in `tsconfig.json`. The codebase ships with an ESLint flat config (`eslint.config.js`) and Prettier configuration (`.prettierrc`).
+Tooling is managed via the checked-in `package.json` scripts (`build`, `test`, `lint`, `format`, `package`, `speckit:sync`) and strict compiler rules in `tsconfig.json`. The codebase ships with an ESLint flat config (`eslint.config.js`) and Prettier configuration (`.prettierrc`).
 
 ### Repository Guide
-- `specs/001-create-a-structured/`: Speckit source of truth (business spec, research, plan, data model, contracts, quickstart, generated tasks). The implementation consumes these artefacts directly; for instance, the AJV schema at `specs/001-create-a-structured/contracts/handoff-artifact.schema.json` is loaded by `ArtifactService`, and multiple tests read the same file during validation.
+- `specs/001-create-a-structured/`: Speckit source of truth (business spec, plan, research, data model, contracts, quickstart, generated tasks). The implementation consumes these artefacts directly; for instance, the AJV schema at `specs/001-create-a-structured/contracts/handoff-artifact.schema.json` is loaded by `ArtifactService`, and multiple tests read the same file during validation.
 - `docs/ci-orchestration.md`: Describes the orchestrator, executor, and collector workflows implemented in `.github/workflows/`.
 - `.github/workflows/`: CI automation (`orchestrator.yml`, `execute.yml`, `collector.yml`, `pr-auto-merge.yml`) that runs the CLI end-to-end.
-- `tools/`: Support scripts and the remote-agent harness used in integration tests.
+- `scripts/`: Utility scripts shipped with the package such as `sync-speckit-artifacts.mjs` and `check-schemas.mjs`.
 
 ## Agentic Workflow (Implemented)
 The end-to-end flow is executed by the code paths outlined below.
 
 1. **Deterministic scheduling** — `src/cli/commands/delegate.ts` loads workflow definitions through `WorkflowRegistry` (`src/services/workflow_registry.ts`) and calls `SchedulingService` to emit `artifacts/schedule/{id}.json`. The behaviour is proven by `tests/integration/scheduling_determinism.test.ts` and `tests/unit/scheduling_tiebreak.test.ts`.
-2. **Execution fan-out** — `.github/workflows/orchestrator.yml` invokes the CLI `delegate` command and passes a ready-matrix into `.github/workflows/execute.yml`. Each matrix job runs `copilot-cli claim`/`complete`, which are backed by `AssignmentService` and `ArtifactService` respectively, guaranteeing one executor per attempt. Contract coverage exists in `tests/integration/claim_semantics.test.ts` and `tests/integration/handoff_artifact_flow.test.ts`.
+2. **Execution fan-out** — `.github/workflows/orchestrator.yml` invokes the CLI `delegate` command and passes a ready-matrix into `.github/workflows/execute.yml`. Each matrix job claims a step via `copilot-cli claim`, performs the work, and finalises via `copilot-cli complete`, producing a handoff artifact at `artifacts/handoff/{timestamp}-{workItem}-{stepKey}-{attemptId}.json` that captures actor, outcome, next action, and baseline flags.
 3. **Gate reviews & rework** — `copilot-cli gate` (`src/cli/commands/gate.ts`) persists review outcomes beneath `artifacts/gates/` using `GateService`. The rewind semantics are enforced in `tests/integration/gate_rework_flow.test.ts`.
 4. **Baseline integration guardrail** — Baseline merges are represented as `baseline-integration` events within the same `artifacts/handoff/` directory. `ArtifactService.enforceBaselineBoundary` blocks new pre-baseline attempts until a revert-style artifact is recorded; see `tests/integration/baseline_integration_boundary.test.ts`.
-5. **Portfolio exports & observability** — `copilot-cli export` (`src/cli/commands/export.ts`) pipes through `MetricsService` to produce `artifacts/exports/portfolio-*.json`, validated by `tests/integration/exports_snapshot.test.ts`. Session visibility commands (`status.ts`, `list.ts`, `follow.ts`, `result.ts`) rely on `SessionService` to stream and persist progress.
+5. **Portfolio exports & observability** — `copilot-cli export` (`src/cli/commands/export.ts`) pipes through `MetricsService` to produce `artifacts/exports/portfolio-{timestamp}.json`, validated by `tests/integration/exports_snapshot.test.ts`. Session visibility commands (`status.ts`, `list.ts`, `follow.ts`, `result.ts`) rely on `SessionService` to stream and persist progress.
 6. **Collector & history** — `.github/workflows/collector.yml` rebuilds the CLI and calls `copilot-cli export`, committing updated `artifacts/` so every action remains tamper-evident. The same flow can be executed locally via the documented commands in `docs/ci-orchestration.md`.
 
 ## Speckit Integration
@@ -38,27 +38,45 @@ Speckit drives the repository via concrete artefacts that the implementation con
 
 In practice, Speckit produces the structured source of truth, and CopilotAgentCLI consumes those files and enforces the guarantees through code and automated tests. This creates a closed loop where planning artefacts remain authoritative while the implementation provides the executable counterpart.
 
+## GitHub Actions Orchestration
+The repository includes four workflows designed to work together with the CLI:
+
+- **Orchestrator (`.github/workflows/orchestrator.yml`)** — Triggered via `workflow_dispatch`. It installs dependencies, builds the CLI (`npm run build`), and executes `copilot-cli delegate --structured-work-item <id>` to generate `artifacts/schedule/<id>.json`. A shell step transforms the schedule into a matrix of ready steps and dispatches the reusable executor workflow.
+- **Executor (`.github/workflows/execute.yml`)** — Runs once per matrix entry. Each job runs `copilot-cli claim` to write a claim record (`src/services/assignment_service.ts`), executes the real work (placeholder step), and finalises with `copilot-cli complete`, which emits schema-validated handoff artifacts via `src/services/artifact_service.ts`. The output files land under `artifacts/handoff/` for downstream consumption.
+- **Collector (`.github/workflows/collector.yml`)** — Optional. Rebuilds the CLI, runs `copilot-cli export` to refresh portfolio metrics (`src/services/metrics_service.ts`), commits the updated `artifacts/` directory with a bot identity, and pushes to the repository. Requires Actions write permissions.
+- **PR Auto Merge (`.github/workflows/pr-auto-merge.yml`)** — On every non-draft PR, runs the full Vitest suite using the CLI. If checks pass and the branch lives in the main repository, it enables GitHub’s squash auto-merge through `peter-evans/enable-pull-request-automerge@v3`. Fork-based PRs are skipped by design.
+
+### Workflow + CLI Interaction
+- All workflows expect the CLI to be compiled (`npm run build` or package installation). The orchestrator and executor explicitly call the `dist/cli/index.js` commands; the collector and auto-merge workflows rely on `npm run test:run`, which executes Vitest against this codebase.
+- CLI commands read and write the Speckit-driven `artifacts/` directories. For example, `delegate` reads `artifacts/workflows/` and `artifacts/work-items/`, while `complete` writes into `artifacts/handoff/` and `artifact_service.ts` enforces schema compliance and baseline protections.
+- The repository ships helper scripts (`scripts/sync-speckit-artifacts.mjs`, `scripts/check-schemas.mjs`) that workflows and local automation can use.
+
+### Required Configuration
+1. **Seed artifacts** — After Speckit outputs `specs/<feature-id>/spec.md`, `plan.md`, and `tasks.md`, run `npm run speckit:sync <feature-id>` (or `node scripts/sync-speckit-artifacts.mjs <feature-id>`). This populates `artifacts/workflows/wf-<feature-id>.yaml` and `artifacts/work-items/work-item-<feature-id>.json`, which the CLI expects.
+2. **Actions permissions** — If you run `.github/workflows/collector.yml`, grant GitHub Actions write access (Settings → Actions → General → Workflow permissions → “Read and write”). Without it, collector pushes will fail.
+3. **Repository settings for auto-merge** — Enable “Allow auto-merge” in GitHub settings and add `PR Auto Merge` as a required status check in branch protection rules if automated merges are desired. Forked PRs remain manual.
+4. **Runner environment** — All workflows assume Node.js 20 and the ability to run `npm ci`, `npm run build`, `npm run lint`, and `npm run test:run`. Ensure any self-hosted runners mirror the expected environment.
+5. **Workflow triggers** — When running orchestrator/execute in downstream projects, pass the exact work-item identifier that matches the generated artifact (e.g., `work-item-001-create-a-structured`).
+
 ## Cross-Project Integration Guide
 Use the following steps to adopt CopilotAgentCLI and its GitHub Actions automation in another repository:
 
-1. **Install the CLI** – Add this repository as a dev dependency (for example `npm install --save-dev git+https://github.com/<your-org>/CopilotAgentCLI.git#<commit>` or `npm link` from a checked-out clone) or vendor the source tree. After installation, run `npm run build` so the published `bin` entry (`copilot-cli -> dist/cli/index.js`) is available.
-2. **Pull in workflows** – Copy `.github/workflows/orchestrator.yml`, `execute.yml`, `collector.yml`, and `pr-auto-merge.yml` into the target project. These workflows depend only on Node.js 20 and the CLI commands located in `dist/cli/index.js` after `npm run build`.
-3. **Seed artefact directories** – Replicate the `artifacts/` subdirectories (`workflows`, `work-items`, `schedule`, `claims`, `handoff`, `gates`, `exports`). `ArtifactService` (src/services/artifact_service.ts) expects this structure and will create missing directories at runtime.
-4. **Author specs with Speckit** – Run Speckit in the new repository to generate `specs/.../spec.md`, `plan.md`, `data-model.md`, `contracts/`, and `tasks.md`. `SchedulingService`, `AssignmentService`, and the Vitest suites all read directly from these files, so no additional wiring is required beyond placing them in `specs/{feature-id}/`.
-5. **Delegate work** – Trigger `.github/workflows/orchestrator.yml` via workflow dispatch or run `copilot-cli delegate --structured-work-item {id}` locally. This command uses `WorkflowRegistry` and `SchedulingService` to produce `artifacts/schedule/{id}.json`.
-6. **Execute & validate** – Allow `.github/workflows/execute.yml` to fan out attempts. Each executor runs `copilot-cli claim` and `copilot-cli complete`, producing validated handoff documents enforced by the AJV schema located at `specs/{feature-id}/contracts/handoff-artifact.schema.json`.
-7. **Collect history** – Enable `.github/workflows/collector.yml` to batch commits of the updated `artifacts/` folder, maintaining the tamper-evident audit trail that the CLI assumes.
+1. **Install the CLI** – Publish the tarball created by `npm run package` or install directly via git (`npm install --save-dev git+https://github.com/<your-org>/CopilotAgentCLI.git#<commit>`). The package’s `prepare` hook compiles the CLI so `node_modules/.bin/copilot-cli` is ready to use.
+2. **Pull in workflows** – Copy `.github/workflows/orchestrator.yml`, `execute.yml`, `collector.yml`, and `pr-auto-merge.yml` into the target project.
+3. **Seed artefact directories** – Replicate the `artifacts/` subdirectories. Either run the bundled Speckit sync script (`node node_modules/copilot-cli/scripts/sync-speckit-artifacts.mjs <feature-id>`) or vendor existing JSON/YAML.
+4. **Author specs with Speckit** – Generate `specs/<feature-id>/` outputs, run the sync script, and commit the results. The CLI and workflows consume these files directly.
+5. **Delegate work** – Trigger `.github/workflows/orchestrator.yml` or run `copilot-cli delegate --structured-work-item <work-item-id>` locally to produce schedules.
+6. **Execute & validate** – Allow `.github/workflows/execute.yml` to fan out attempts, producing handoff artifacts and exercising the baseline guards.
+7. **Collect history** – Enable `.github/workflows/collector.yml` to commit `artifacts/` updates, keeping a tamper-evident trail.
 
 ### Bridging Speckit to Artifacts
-- Run `npm run speckit:sync [feature-id]` after generating new Speckit outputs. The script in `scripts/sync-speckit-artifacts.mjs` inspects `specs/<feature-id>/tasks.md`, builds a deterministic workflow definition (`artifacts/workflows/wf-<feature-id>.yaml`), and seeds the corresponding work-item descriptor under `artifacts/work-items/`. Existing files are preserved unless you pass `--force`, ensuring repeatable generation without clobbering curated workflows.
-- Because the workflow generator consumes the exact markdown that Speckit emits (`spec.md`, `plan.md`, `tasks.md`), new features coming out of Speckit land with all of the structure that the CLI and GitHub Actions expect—ready to delegate via `copilot-cli delegate` and execute through the orchestrator/execute pipelines.
+- Run `npm run speckit:sync [feature-id]` after generating new Speckit outputs. The script inspects `specs/<feature-id>/tasks.md`, builds a deterministic workflow definition, and seeds the corresponding work-item descriptor under `artifacts/work-items/`. Existing files are preserved unless you pass `--force`.
+- Because the workflow generator consumes the Speckit markdown (`spec.md`, `plan.md`, `tasks.md`), new features land with the structure expected by the CLI and GitHub Actions.
 
 ### Publishing & Reuse
-- `npm run package` builds the CLI and produces a tarball (`copilot-cli-<version>.tgz`) that you can publish or attach to a release. The `files` allowlist ships `dist/`, GitHub workflow templates, seed artifacts, docs, and the Speckit sync script—everything downstream repos need.
-- When the package is installed via npm or git, the `prepare` script automatically compiles TypeScript so `node_modules/.bin/copilot-cli` is immediately usable.
-- Consumers can copy the bundled `.github/workflows/*.yml`, then execute `npx copilot-cli -- structured-work-item` commands as normal. To regenerate artifacts from Speckit outputs inside another repository, invoke the bundled script directly (for example `node node_modules/copilot-cli/scripts/sync-speckit-artifacts.mjs <feature-id>`).
-
-Because every workflow step delegates to the shipped CLI commands and services, integrating into a new project only requires aligning directory layout and installing the package. All runtime guarantees (deterministic scheduling, exclusive claims, baseline enforcement) are delivered by the existing code rather than by documentation.
+- `npm run package` builds the CLI and produces `copilot-cli-<version>.tgz` containing `dist/` binaries, GitHub workflow templates, seed artifacts, specs, docs, and helper scripts.
+- When the tarball is installed, `npm run prepare` re-compiles the CLI automatically. Consumers can copy the workflows, configure Actions permissions, and invoke the bundled sync script to generate artifacts.
+- `npm run test:run` currently requires follow-up: seven contract suites fail with “Vitest cannot be imported in a CommonJS module using require()…”. This stems from Vitest’s CJS restrictions surfaced on 2025-09-20. Other suites pass, but address this before shipping a release.
 
 ## PR Auto Merge Workflow
 This repository includes a `PR Auto Merge` GitHub Actions workflow that validates pull requests and, when they originate from in-repo branches, calls GitHub’s auto-merge APIs through `peter-evans/enable-pull-request-automerge@v3`.
@@ -72,6 +90,10 @@ This repository includes a `PR Auto Merge` GitHub Actions workflow that validate
 ### Current blockers & follow-up actions
 - **Repository setting**: A maintainer must enable “Allow auto-merge” in repository settings or GitHub will reject the API call.
 - **Branch protection**: Add `PR Auto Merge` as a required status check to gate merges on the workflow result.
-- **Forked pull requests**: GitHub disallows automatic merges from forks, so maintainers must merge those manually after checks pass.
+- **Forked pull requests**: GitHub disallows automatic merges from forks; maintainers must merge those manually after checks pass.
 
-The workflow has been validated locally via `npm run test:run`, and no stubs remain in the automation.
+The workflow has been validated locally with the caveat noted above: `npm run test:run` currently fails due to Vitest attempting to load CommonJS entrypoints. Address this (e.g., by running the suites via `tsx`, or migrating to pure ESM tests) before relying on auto-merge.
+
+## Known Issues
+- `npm run test:run` (and therefore `PR Auto Merge`) currently reports Vitest CJS import errors in seven contract suites. Investigate and resolve before publishing a release or relying on automated merges.
+- The Speckit sync script writes artifacts into the repository; if you package the CLI, ensure downstream consumers understand it.
