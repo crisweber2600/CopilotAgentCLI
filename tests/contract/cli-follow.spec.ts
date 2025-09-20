@@ -3,7 +3,6 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { once } from 'node:events';
-import type { ChildProcess } from 'node:child_process';
 import { expectExitCode, parseJson, runCliCommand, spawnCliProcess } from './cli-delegate.spec';
 
 type SessionRecord = {

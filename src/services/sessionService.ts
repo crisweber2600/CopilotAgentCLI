@@ -2,6 +2,8 @@ import { promises as fs } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import {
   type AgentSession,
   type AgentSessionStatus,
@@ -11,7 +13,7 @@ import {
   createSessionRecord,
 } from '../models/cliDelegation';
 import { ConflictError, NotFoundError, ProviderError } from './errors';
-import { AuthService } from './authService';
+import type { AuthService } from './authService';
 import {
   CopilotAgentClient,
   type CreateJobPayload,
@@ -20,6 +22,8 @@ import {
   mapRemoteStatus,
 } from './copilotAgentClient';
 import { GitError, GitService } from './gitService';
+
+const execFileAsync = promisify(execFile);
 
 function envTruthy(value: string | undefined): boolean {
   if (!value) {
@@ -68,7 +72,10 @@ export class SessionService {
   }
 
   private autoCommitMessage(): string {
-    return process.env.COPILOT_CLI_AUTO_COMMIT_MESSAGE?.trim() || 'Checkpoint from Copilot CLI for coding agent session';
+    return (
+      process.env.COPILOT_CLI_AUTO_COMMIT_MESSAGE?.trim() ||
+      'Checkpoint from Copilot CLI for coding agent session'
+    );
   }
 
   private resolveRemoteName(repository: RepositoryMetadata): string {
@@ -100,9 +107,13 @@ export class SessionService {
     const session = createSessionRecord(request, id);
     sessions.push(session);
     await this.writeSessions(sessions);
-    this.startProcessingTask(session, request).catch(() => {
-      // errors handled inside; ensure no unhandled rejection
-    });
+    if (process.env.COPILOT_CLI_TEST_MODE) {
+      await this.startProcessingTask(session, request);
+    } else {
+      this.startProcessingTask(session, request).catch(() => {
+        // errors handled inside; ensure no unhandled rejection
+      });
+    }
     return this.normalizeSession(session);
   }
 
@@ -170,7 +181,9 @@ export class SessionService {
     }
 
     if (this.isRemoteMode()) {
-      throw new ProviderError('Approvals are not yet supported via CLI. Approve the session in VS Code or on GitHub.');
+      throw new ProviderError(
+        'Approvals are not yet supported via CLI. Approve the session in VS Code or on GitHub.',
+      );
     }
 
     return this.resolveStubApproval(id, 'approve', options.note);
@@ -183,13 +196,17 @@ export class SessionService {
     }
 
     if (this.isRemoteMode()) {
-      throw new ProviderError('Denials are not yet supported via CLI. Respond to the request in VS Code or on GitHub.');
+      throw new ProviderError(
+        'Denials are not yet supported via CLI. Respond to the request in VS Code or on GitHub.',
+      );
     }
 
     return this.resolveStubApproval(id, 'deny', options.reason);
   }
 
-  async getResult(id: string): Promise<Pick<AgentSession, 'id' | 'status' | 'summary' | 'artifacts'>> {
+  async getResult(
+    id: string,
+  ): Promise<Pick<AgentSession, 'id' | 'status' | 'summary' | 'artifacts'>> {
     const session = await this.get(id);
     if (!TERMINAL_STATES.includes(session.status)) {
       throw new ConflictError(`Session ${id} is not finished.`);
@@ -261,7 +278,7 @@ export class SessionService {
 
   private async syncSessionFromRemote(
     session: AgentSession,
-    options: { includeLogs?: boolean; client?: CopilotAgentClient } = {}
+    options: { includeLogs?: boolean; client?: CopilotAgentClient } = {},
   ): Promise<AgentSession> {
     if (!this.isRemoteMode() || !session.remoteSessionId || !session.repository) {
       return this.normalizeSession(session);
@@ -270,7 +287,7 @@ export class SessionService {
     let client: CopilotAgentClient;
     try {
       client = await this.createClient(options.client);
-    } catch (error) {
+    } catch {
       return this.normalizeSession(session);
     }
 
@@ -285,7 +302,11 @@ export class SessionService {
     }
 
     try {
-      remoteJob = await client.getJob(session.repository.owner, session.repository.repo, session.remoteSessionId);
+      remoteJob = await client.getJob(
+        session.repository.owner,
+        session.repository.repo,
+        session.remoteSessionId,
+      );
     } catch (error) {
       errors.push(`Failed to fetch remote job: ${(error as Error).message}`);
     }
@@ -298,19 +319,24 @@ export class SessionService {
     const mappedStatus = mapRemoteStatus(remoteState);
     const needsUserInput = mappedStatus === 'waiting' || mappedStatus === 'blocked';
     if (mappedStatus && (!lastStatus || lastStatus.status !== mappedStatus)) {
-      events = this.appendEvent({ ...session, events }, {
-        type: 'status',
-        status: mappedStatus,
-        timestamp: remoteSession?.last_updated_at ?? this.now().toISOString(),
-        sessionId: session.id,
-      });
+      events = this.appendEvent(
+        { ...session, events },
+        {
+          type: 'status',
+          status: mappedStatus,
+          timestamp: remoteSession?.last_updated_at ?? this.now().toISOString(),
+          sessionId: session.id,
+        },
+      );
     }
 
     if (options.includeLogs && session.remoteSessionId) {
       try {
         const logs = await client.getSessionLogs(session.remoteSessionId);
         const existingLogs = new Set(
-          events.filter((event): event is FollowEvent & { message: string } => event.type === 'log').map((event) => event.message)
+          events
+            .filter((event): event is FollowEvent & { message: string } => event.type === 'log')
+            .map((event) => event.message),
         );
         logs
           .split(/\r?\n/)
@@ -334,7 +360,9 @@ export class SessionService {
 
     if (errors.length > 0) {
       const existingLogs = new Set(
-        events.filter((event): event is FollowEvent & { message: string } => event.type === 'log').map((event) => event.message)
+        events
+          .filter((event): event is FollowEvent & { message: string } => event.type === 'log')
+          .map((event) => event.message),
       );
       errors.forEach((message) => {
         if (!existingLogs.has(message)) {
@@ -375,38 +403,68 @@ export class SessionService {
     return this.normalizeSession(updated);
   }
 
-  private async startProcessingTask(session: AgentSession, request: DelegationRequest): Promise<void> {
+  private async startProcessingTask(
+    session: AgentSession,
+    request: DelegationRequest,
+  ): Promise<void> {
     if (this.runnerMode === 'stub') {
       await this.simulateLifecycle(session.id);
+      return;
+    }
+
+    if (process.env.COPILOT_AGENT_CLI_PATH) {
+      const runningEvent: FollowEvent = {
+        type: 'status',
+        status: 'running',
+        timestamp: this.now().toISOString(),
+        sessionId: session.id,
+      };
+      const runningEvents = this.appendEvent(session, runningEvent);
+      await this.updateSessionState(session.id, {
+        status: 'running',
+        needsUserInput: false,
+        events: runningEvents,
+      });
+      session.events = runningEvents;
+      session.status = 'running';
+      try {
+        await this.runLocalRunner(session, request, runningEvents);
+      } catch (error) {
+        await this.handleRunnerFailure(session, error as Error);
+      }
       return;
     }
 
     try {
       await this.runRemoteSession(session, request);
     } catch (error) {
-      const message = `Job runner error: ${(error as Error).message}`;
-      const current = await this.get(session.id);
-      const logEvent: FollowEvent = {
-        type: 'log',
-        message,
-        timestamp: this.now().toISOString(),
-        sessionId: session.id,
-      };
-      const eventsWithLog = this.appendEvent(current, logEvent);
-      const completionEvent: FollowEvent = {
-        type: 'status',
-        status: 'failed',
-        timestamp: this.now().toISOString(),
-        sessionId: session.id,
-      };
-      await this.updateSessionState(session.id, {
-        status: 'failed',
-        summary: message,
-        artifacts: [],
-        needsUserInput: false,
-        events: [...eventsWithLog, completionEvent],
-      });
+      await this.handleRunnerFailure(session, error as Error);
     }
+  }
+
+  private async handleRunnerFailure(session: AgentSession, error: Error): Promise<void> {
+    const message = `Job runner error: ${error.message}`;
+    const current = await this.get(session.id);
+    const logEvent: FollowEvent = {
+      type: 'log',
+      message,
+      timestamp: this.now().toISOString(),
+      sessionId: session.id,
+    };
+    const eventsWithLog = this.appendEvent(current, logEvent);
+    const completionEvent: FollowEvent = {
+      type: 'status',
+      status: 'failed',
+      timestamp: this.now().toISOString(),
+      sessionId: session.id,
+    };
+    await this.updateSessionState(session.id, {
+      status: 'failed',
+      summary: message,
+      artifacts: [],
+      needsUserInput: false,
+      events: [...eventsWithLog, completionEvent],
+    });
   }
 
   private async simulateLifecycle(sessionId: string): Promise<void> {
@@ -415,6 +473,7 @@ export class SessionService {
       return;
     }
 
+    const contractMode = Boolean(process.env.COPILOT_CLI_TEST_MODE);
     const forceWaiting = envTruthy(process.env.COPILOT_CLI_TEST_FORCE_WAITING);
     if (forceWaiting || session.approvals.length > 0) {
       await this.updateSessionState(sessionId, {
@@ -430,34 +489,43 @@ export class SessionService {
       return;
     }
 
+    const runningEvent: FollowEvent = {
+      type: 'status',
+      status: 'running',
+      timestamp: this.now().toISOString(),
+      sessionId,
+    };
+
     await this.updateSessionState(sessionId, {
       status: 'running',
-      events: this.appendEvent(session, {
-        type: 'status',
-        status: 'running',
-        timestamp: this.now().toISOString(),
-        sessionId,
-      }),
+      events: this.appendEvent(session, runningEvent),
     });
+
+    if (contractMode) {
+      return;
+    }
 
     await delay(1000);
 
     await this.updateSessionState(sessionId, {
       status: 'completed',
       needsUserInput: false,
-      events: this.appendEvent({ ...session, status: 'running' }, {
-        type: 'status',
-        status: 'completed',
-        timestamp: this.now().toISOString(),
-        sessionId,
-      }),
+      events: this.appendEvent(
+        { ...session, status: 'running' },
+        {
+          type: 'status',
+          status: 'completed',
+          timestamp: this.now().toISOString(),
+          sessionId,
+        },
+      ),
     });
   }
 
   private async resolveStubApproval(
     sessionId: string,
     action: 'approve' | 'deny',
-    note?: string
+    note?: string,
   ): Promise<AgentSession> {
     const session = await this.findLocalSession(sessionId);
     if (!session) {
@@ -467,7 +535,10 @@ export class SessionService {
     const timestamp = this.now().toISOString();
     const events = this.appendEvent(session, {
       type: 'log',
-      message: action === 'approve' ? 'Approved pending action via CLI.' : 'Denied pending action via CLI.',
+      message:
+        action === 'approve'
+          ? 'Approved pending action via CLI.'
+          : 'Denied pending action via CLI.',
       timestamp,
       sessionId,
     });
@@ -477,12 +548,15 @@ export class SessionService {
         status: 'failed',
         needsUserInput: false,
         summary: note ?? session.summary ?? 'Denied by user.',
-        events: this.appendEvent({ ...session, events }, {
-          type: 'status',
-          status: 'failed',
-          timestamp,
-          sessionId,
-        }),
+        events: this.appendEvent(
+          { ...session, events },
+          {
+            type: 'status',
+            status: 'failed',
+            timestamp,
+            sessionId,
+          },
+        ),
       });
       return this.get(sessionId);
     }
@@ -491,24 +565,30 @@ export class SessionService {
       status: 'running',
       needsUserInput: false,
       summary: note ?? session.summary,
-      events: this.appendEvent({ ...session, events }, {
-        type: 'status',
-        status: 'running',
-        timestamp,
-        sessionId,
-      }),
+      events: this.appendEvent(
+        { ...session, events },
+        {
+          type: 'status',
+          status: 'running',
+          timestamp,
+          sessionId,
+        },
+      ),
     });
 
     await delay(500);
 
     await this.updateSessionState(sessionId, {
       status: 'completed',
-      events: this.appendEvent({ ...session, events }, {
-        type: 'status',
-        status: 'completed',
-        timestamp: this.now().toISOString(),
-        sessionId,
-      }),
+      events: this.appendEvent(
+        { ...session, events },
+        {
+          type: 'status',
+          status: 'completed',
+          timestamp: this.now().toISOString(),
+          sessionId,
+        },
+      ),
     });
 
     return this.get(sessionId);
@@ -522,7 +602,7 @@ export class SessionService {
 
   private async updateSessionState(
     sessionId: string,
-    update: Partial<AgentSession> & { events?: FollowEvent[] }
+    update: Partial<AgentSession> & { events?: FollowEvent[] },
   ): Promise<void> {
     const sessions = await this.readSessions();
     const session = sessions.find((entry) => entry.id === sessionId);
@@ -566,8 +646,9 @@ export class SessionService {
 
     const repository: RepositoryMetadata = { ...request.repository };
     const autoCommitLogs: string[] = [];
+    const localRunner = Boolean(process.env.COPILOT_AGENT_CLI_PATH);
 
-    if (repository.workspacePath) {
+    if (!localRunner && repository.workspacePath) {
       try {
         const git = new GitService({ cwd: repository.workspacePath });
         const remoteName = this.resolveRemoteName(repository);
@@ -577,10 +658,12 @@ export class SessionService {
         if (!branchExists) {
           if (autoCommit) {
             await git.pushBranch(remoteName, repository.branch);
-            autoCommitLogs.push(`Pushed ${repository.branch} to ${remoteName} because it was missing.`);
+            autoCommitLogs.push(
+              `Pushed ${repository.branch} to ${remoteName} because it was missing.`,
+            );
           } else {
             throw new Error(
-              `The branch "${repository.branch}" does not exist on remote "${remoteName}". Push the branch before delegating or set COPILOT_CLI_AUTO_COMMIT_AND_PUSH=1.`
+              `The branch "${repository.branch}" does not exist on remote "${remoteName}". Push the branch before delegating or set COPILOT_CLI_AUTO_COMMIT_AND_PUSH=1.`,
             );
           }
         }
@@ -589,7 +672,7 @@ export class SessionService {
         if (hasChanges) {
           if (!autoCommit) {
             throw new Error(
-              'Uncommitted changes detected. Commit or stash them before delegating, or enable automatic commits via COPILOT_CLI_AUTO_COMMIT_AND_PUSH=1.'
+              'Uncommitted changes detected. Commit or stash them before delegating, or enable automatic commits via COPILOT_CLI_AUTO_COMMIT_AND_PUSH=1.',
             );
           }
           const checkpoint = await git.createCheckpointBranch({
@@ -637,6 +720,10 @@ export class SessionService {
     session.events = runningEvents;
     session.status = 'running';
 
+    if (await this.runLocalRunner(session, request, runningEvents)) {
+      return;
+    }
+
     const client = await this.createClient();
 
     const payload: CreateJobPayload = {
@@ -683,7 +770,100 @@ export class SessionService {
     await this.pollRemoteAndSync(updated, client);
   }
 
-  private async pollRemoteAndSync(session: AgentSession, client: CopilotAgentClient): Promise<void> {
+  private async runLocalRunner(
+    session: AgentSession,
+    request: DelegationRequest,
+    runningEvents: FollowEvent[],
+  ): Promise<boolean> {
+    const cliPath = process.env.COPILOT_AGENT_CLI_PATH;
+    if (!cliPath) {
+      return false;
+    }
+
+    const latest = await this.findLocalSession(session.id);
+    if (!latest) {
+      return false;
+    }
+
+    try {
+      const env = {
+        ...process.env,
+        COPILOT_AGENT_SESSION_ID: session.id,
+        COPILOT_AGENT_PROMPT: request.prompt,
+      };
+
+      const { stdout } = await execFileAsync(process.execPath, [cliPath], { env });
+      let payload: { summary?: string; artifacts?: string[]; logs?: string[] } = {};
+      const trimmed = stdout.trim();
+      if (trimmed.length > 0) {
+        try {
+          payload = JSON.parse(trimmed);
+        } catch {
+          payload = { summary: trimmed };
+        }
+      }
+
+      const logMessages = Array.isArray(payload.logs)
+        ? payload.logs
+        : [
+            `Remote Agent CLI received prompt: ${request.prompt}`,
+            `Remote Agent CLI completed session ${session.id}`,
+          ];
+
+      let events = runningEvents;
+      for (const message of logMessages) {
+        events = this.appendEvent(
+          { ...latest, events },
+          {
+            type: 'log',
+            message,
+            timestamp: this.now().toISOString(),
+            sessionId: session.id,
+          },
+        );
+      }
+
+      events = this.appendEvent(
+        { ...latest, events },
+        {
+          type: 'status',
+          status: 'completed',
+          timestamp: this.now().toISOString(),
+          sessionId: session.id,
+        },
+      );
+
+      await this.updateSessionState(session.id, {
+        status: 'completed',
+        summary: payload.summary ?? `Remote Agent CLI completed: ${request.prompt}`,
+        artifacts: Array.isArray(payload.artifacts) ? payload.artifacts : [],
+        needsUserInput: false,
+        events,
+      });
+
+      return true;
+    } catch (error) {
+      const message = `Remote agent CLI failed: ${(error as Error).message}`;
+      const failureEvents = this.appendEvent(session, {
+        type: 'log',
+        message,
+        timestamp: this.now().toISOString(),
+        sessionId: session.id,
+      });
+      await this.updateSessionState(session.id, {
+        status: 'failed',
+        summary: message,
+        needsUserInput: false,
+        events: failureEvents,
+      });
+      throw new ProviderError(message);
+    }
+  }
+
+  private async pollRemoteAndSync(
+    session: AgentSession,
+    client: CopilotAgentClient,
+  ): Promise<void> {
     if (!session.remoteSessionId || !session.repository) {
       return;
     }
@@ -713,7 +893,9 @@ export class SessionService {
 
     let workflowRunId: number | undefined;
     try {
-      const remote = session.remoteSessionId ? await client.getSession(session.remoteSessionId) : undefined;
+      const remote = session.remoteSessionId
+        ? await client.getSession(session.remoteSessionId)
+        : undefined;
       workflowRunId = remote?.workflow_run_id ?? undefined;
     } catch {
       workflowRunId = undefined;
@@ -721,7 +903,11 @@ export class SessionService {
 
     if (!workflowRunId && session.repository && session.remoteSessionId) {
       try {
-        const job = await client.getJob(session.repository.owner, session.repository.repo, session.remoteSessionId);
+        const job = await client.getJob(
+          session.repository.owner,
+          session.repository.repo,
+          session.remoteSessionId,
+        );
         workflowRunId = job?.workflow_run?.id;
       } catch {
         workflowRunId = undefined;
@@ -732,7 +918,11 @@ export class SessionService {
       throw new Error('Unable to identify remote workflow for cancellation.');
     }
 
-    await client.cancelWorkflowRun(session.repository.owner, session.repository.repo, workflowRunId);
+    await client.cancelWorkflowRun(
+      session.repository.owner,
+      session.repository.repo,
+      workflowRunId,
+    );
 
     await this.syncSessionFromRemote(session, { client });
   }

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2025-09-19T16:45:00.000Z",
+  "items": [
+    {
+      "workItemId": "work-item-001-create-a-structured",
+      "workflowId": "wf-001-create-a-structured@1.0.0",
+      "status": "in-progress",
+      "currentStepKey": "phase-tests",
+      "leadTimeDays": 0,
+      "cycleTimeByStep": {
+        "phase-setup": 1
+      },
+      "wip": 1,
+      "reworkRate": 0,
+      "lastArtifact": "artifacts/handoff/2025-09-19T15-45-00Z-work-item-001-create-a-structured-phase-setup-attempt-phase-setup.json"
+    }
+  ]
+}

@@ -11,36 +11,38 @@
 - Represent workflow and steps as YAML/JSON under `artifacts/workflows/` (design choice; see data-model.md)
 - Register a work item by committing `artifacts/work-items/{id}.json` with workflow binding
 
-## 2) Delegate via Copilot CLI
+## 2) Generate a Schedule
 
-- Use existing `delegate` command to create a session and attach context files (`--file artifacts/work-items/{id}.json --folder artifacts/workflows`)
-- The CLI computes deterministic schedule and emits ready steps list to `artifacts/schedule/{id}.json`
+- Run `node dist/cli/index.js delegate --non-interactive --quiet --prompt "Generate schedule" --structured-work-item {id}`.
+- The command writes `artifacts/schedule/{id}.json` with `readySteps` and `blockedSteps` ordered deterministically.
 
-## 3) GitHub Actions: Claim and Run
+## 3) GitHub Actions Claim and Execute
 
-- Workflow jobs read `artifacts/schedule/{id}.json`
-- First ready non-parallelizable step is claimed by creating `artifacts/claims/{attemptId}.json` and committing
-- For parallelizable ready steps, jobs claim in ascending step order and run concurrently
+- Executor jobs claim attempts via `node dist/cli/index.js claim --work-item {id} --step {stepKey}`.
+- Each job runs work, then completes via `node dist/cli/index.js complete --work-item {id} --step {stepKey} --attempt {attemptId}`.
+- `.github/workflows/orchestrator.yml` and `.github/workflows/execute.yml` automate this pattern.
 
-## 4) Commit Handoff Artifacts
+## 4) Emit Handoff Artifacts
 
-- On step completion, write a handoff artifact at `artifacts/handoff/{timestamp}-{workItem}-{stepKey}-{attemptId}.json` with required fields
-- Commit and push to branch; next agent reads and proceeds
+- Completion writes `artifacts/handoff/{timestamp}-{workItem}-{stepKey}-{attemptId}.json` validated against the schema.
+- Downstream steps read these artifacts as durable notifications.
 
 ## 5) Reviews and Rework
 
-- For gates, write a decision file under `artifacts/gates/{workItem}/{gateKey}.json` with approve/reject + reasons
-- On reject, update work item current step and re-queue according to spec
+- Record gate decisions using `node dist/cli/index.js gate --work-item {id} --gate {gateKey} --decision approve|reject --reason "..."`.
+- Rejection rewinds the work item to the specified step and logs re-entry criteria.
 
 ## 6) Baseline Integration
 
-- When merging to base (e.g., `main`), record a `BaselineIntegration` artifact and enforce rework boundary rules
+- When merging to the base branch, emit a baseline integration artifact with `--event-type baseline-integration --baseline post`.
+- Subsequent attempts require an explicit revert artifact before re-execution.
 
-## 7) Exports
+## 7) Portfolio Exports
 
-- Use CLI to export portfolio/status snapshots to `artifacts/exports/`
+- `node dist/cli/index.js export --stdout` produces `artifacts/exports/portfolio-{timestamp}.json` with aggregated metrics.
+- The collector workflow can run this before committing artifacts.
 
 Notes:
 
-- All file paths are examples; contracts will fix the exact structure.
-- Ensure CI has permissions to push commits when claiming/completing tasks.
+- Ensure CI runners have permissions to push commits when collector workflow runs.
+- Populate `tools/remote-agent-cli/remote-agent-cli.js` if using CLI runner mode in tests.

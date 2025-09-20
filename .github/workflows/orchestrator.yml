@@ -1,0 +1,57 @@
+name: Orchestrator
+
+on:
+  workflow_dispatch:
+    inputs:
+      work-item-id:
+        description: 'Work item identifier to schedule.'
+        required: true
+
+jobs:
+  orchestrate:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: orchestrator-${{ github.event.inputs.work-item-id }}
+      cancel-in-progress: false
+    outputs:
+      ready-matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: npm ci
+      - name: Build CLI
+        run: npm run build
+      - name: Generate schedule
+        run: |
+          node dist/cli/index.js delegate \
+            --non-interactive \
+            --quiet \
+            --prompt "Generate schedule" \
+            --structured-work-item "${{ github.event.inputs.work-item-id }}"
+      - name: Compute ready matrix
+        id: matrix
+        run: |
+          file=artifacts/schedule/${{ github.event.inputs.work-item-id }}.json
+          if [ ! -f "$file" ]; then
+            echo "matrix=[]" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          ready=$(jq --arg work "${{ github.event.inputs.work-item-id }}" -c '[.readySteps[] | {workItemId: $work, stepKey: .key, order: .order}]' "$file")
+          echo "matrix=$ready" >> "$GITHUB_OUTPUT"
+      - name: Upload schedule artifact
+        if: steps.matrix.outputs.matrix != '[]'
+        uses: actions/upload-artifact@v4
+        with:
+          name: schedule-${{ github.event.inputs.work-item-id }}
+          path: artifacts/schedule/${{ github.event.inputs.work-item-id }}.json
+
+  dispatch:
+    needs: orchestrate
+    if: ${{ needs.orchestrate.outputs.ready-matrix != '[]' && needs.orchestrate.outputs.ready-matrix != '' }}
+    uses: ./.github/workflows/execute.yml
+    with:
+      work-item-id: ${{ github.event.inputs.work-item-id }}
+      ready-matrix: ${{ needs.orchestrate.outputs.ready-matrix }}
